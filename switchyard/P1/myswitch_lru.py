@@ -14,11 +14,13 @@ class TableEntry():
         self.timestamp = timestamp
 
 def get_table_entry(fw_table, interface):
+    return
     #TODO return the table entry if iit exists
     # should return the index of the entry or false if there isn't an entry
 
 
 def insert_table_entry(fw_table, entry: TableEntry, index_to_remove):
+    return
     #TODO: this maintains the LRU format of the tablle
 
 def main(net):
