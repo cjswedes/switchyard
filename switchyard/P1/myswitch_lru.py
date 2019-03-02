@@ -7,27 +7,50 @@ that doesn't learn.)
 '''
 from switchyard.lib.userlib import *
 
+class TableEntry():
+    def __init__(self, intf, mac, timestamp):
+        self.intf = intf
+        self.mac = mac
+        self.timestamp = timestamp
+
+def get_table_entry(fw_table, interface):
+    #TODO return the table entry if iit exists
+    # should return the index of the entry or false if there isn't an entry
+
+
+def insert_table_entry(fw_table, entry: TableEntry, index_to_remove):
+    #TODO: this maintains the LRU format of the tablle
+
 def main(net):
-    print("never ran")
-    my_interfaces = net.interfaces() 
+    my_interfaces = net.interfaces()
     mymacs = [intf.ethaddr for intf in my_interfaces]
+    fw_tbl = [] #this is where we will maintain our forward table
 
     while True:
         try:
-            print("tyring to receive")
-
             timestamp,input_port,packet = net.recv_packet()
         except NoPackets:
             continue
         except Shutdown:
             return
 
-        log_debug ("In {} received packet {} on {}".format(net.name, packet, input_port))
+        print("Packet sent from {} on input_port={} destined for: {}".format(packet[0].src, input_port, packet[0].dst))
         if packet[0].dst in mymacs:
-            log_debug ("Packet intended for me")
+            print("Packet intended for me. Just drop it")
         else:
+            entry, index = get_table_entry(fw_tbl, input_port)
+            new_entry = TableEntry(input_port, packet[0].src, timestamp)
+            if entry and entry.mac == packet[0].dst:
+                print("We know destination so forward")
+                net.send_packet(input_port, packet)
+                insert_table_entry(fw_tbl, new_entry, index)
+                continue
+            else:
+                insert_table_entry(fw_tbl, new_entry, index)
+
+            #this is simply doing the broadcast since we dont know the MAC
             for intf in my_interfaces:
                 if input_port != intf.name:
-                    log_debug ("Flooding packet {} to {}".format(packet, intf.name))
+                    print("Flooding packet {} to {}".format(packet, intf.name))
                     net.send_packet(intf.name, packet)
     net.shutdown()
