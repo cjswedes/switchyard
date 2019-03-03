@@ -26,11 +26,12 @@ def get_table_entry(fw_table, address):
 
 def insert_table_entry(fw_table, entry: TableEntry, index, ifDst):
     # TODO: this maintains the LRU format of the table
-    #  Parameters:
-    #       index: -1 if not in table, else 0-4
-    #       ifDst: automatically Most Recently Used if dst, False if src
-    #  LRU: [Least Recent, ... ,Most Recent]
-    #  Return: none
+    '''Parameters:
+           index: -1 if not in table, else 0-4
+           ifDst: automatically Most Recently Used if dst, False if src
+      LRU: [Least Recent, ... ,Most Recent]
+      Return: none
+    '''
     print("INSERT_TABLE_ENTRY : index={} : len={}".format(index, len(fw_table)))
 
     if index >= 0:
