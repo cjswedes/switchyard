@@ -14,9 +14,10 @@ class TableEntry():
         self.timestamp = timestamp
 
 def get_table_entry(fw_table, address):
-    # TODO return the table entry if it exists
-    #  should return the index of the entry or false if there isn't an entry
-    #  Return: {entry, index}
+    '''
+    should return the index of the entry or false if there isn't an entry
+    Return: {entry, index}
+    '''
     print("GET_TABLE_ENTRY") # : {} : {}".format(fw_table, interface))
     for i in range(len(fw_table)):
         if fw_table[i].mac == address:
@@ -25,7 +26,6 @@ def get_table_entry(fw_table, address):
     return False, -1
 
 def insert_table_entry(fw_table, entry: TableEntry, index, ifDst):
-    # TODO: this maintains the LRU format of the table
     '''Parameters:
            index: -1 if not in table, else 0-4
            ifDst: automatically Most Recently Used if dst, False if src
