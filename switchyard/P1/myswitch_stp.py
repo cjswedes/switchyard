@@ -124,16 +124,18 @@ def main(net):
         net.send_packet(intf.name, packet)
 
     # start timer to automatically send pkt every 2 seconds
-    sending_spt = RepeatedTimer(2, send_spt, root_id=spt_root,
-                                hops=0, fw_mode=fw_mode, net=net,
-                                my_interfaces=my_interfaces)
+    #sending_spt = RepeatedTimer(2, send_spt, root_id=spt_root,
+    #                            hops=0, fw_mode=fw_mode, net=net,
+    #                            my_interfaces=my_interfaces)
     while True:
         try:
             #stop sending stp if we are no longer the root
             if root_intf:
-                sending_spt.stop()
+                a=1
+                #sending_spt.stop()
             else:
-                sending_spt.start()
+                a=1
+                #sending_spt.start()
             timestamp,input_port,packet = net.recv_packet()
         except NoPackets:
             continue
