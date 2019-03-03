@@ -94,8 +94,31 @@ def initialize_stp(interfaces):
     print("id: {}\npacket: {}".format(curr, bool(pkt)))
     return curr, pkt
 
-def handle_stp(pkt):
-    return
+def handle_stp(pkt: Packet, spt_root, fw_mode, root_intf, input_intf):
+    '''
+        When a node receives a spanning tree packet it examines the root attribute:
+
+    If the id in the received packet is smaller than the id that the node currently thinks is the root, the id in the received packet becomes the new root. The node should then forward the packet out all interfaces except for the one on which the packet was received. Prior to forwarding, the number of hops to the root should be incremented by 1. The interface on which the spanning tree message arrived must be set to forwarding mode if it is not already set, and the number of hops to the root (the value in the received packet + 1) must be recorded.
+    If the id in the received packet is the same as the id that the node currently thinks is the root, it examines the number of hops to the root value:
+        If the number of hops to the root + 1 is less than the value that the switch has stored, it sets the interface on which this packet has arrived to forwarding mode (If it is not already set). The switch should then forward the spanning tree message out all interfaces except the one on which the message arrived, incrementing the number of hops to the root by 1 prior to forwarding.
+        If the number of hops to the root + 1 is greater than the value that the switch has stored, just ignore the packet and do nothing
+        If the number of hops to the root + 1 equal to the value that the switch has stored, but is different from the initial port it got this message from, it should set the interface on which this packet arrived to blocking mode.
+    Lastly, the learning switch forwarding algorithm changes a bit in the context of a spanning tree. Instead of flooding a frame with an unknown destination Ethernet address out every port (except the one on which the frame was received), a switch only floods a frame out every port (again, except the input port) if and only if the interface is in forwarding mode.
+
+    :param pkt:
+    :return:
+    '''
+    #extract SpanningTreeMessage
+    msg = pkt.get_header_by_name('SpanningTreeMesssage')
+
+    #compare ids
+    if msg.root < spt_root:
+        spt_root = msg.root
+        root_int = input_intf #where do we account for the case of there being another root node, and we discover that we should be the root node. Can this ever happen?
+        fwd_spt_pkt = mk_stp_pkt(root_id=spt_root, hops=msg.hops_to_root+1)
+        fw_mode[root_int] = True
+        #need to send pkt and record the number of hops
+    return None, None
 
 '''
 This is run every two seconds, by the timer.
@@ -108,11 +131,20 @@ def send_spt(root_id, hops, my_interfaces, fw_mode, net):
         net.send_packet(intf.name, pkt)
         fw_mode[intf.name]=True
 
+def spt_send_if_root(sending_spt, root_intf):
+    #stop sending stp if we are no longer the root
+    if root_intf:
+        a=1
+        sending_spt.stop()
+    else:
+        a=1 #this is hear to avoid syntax failures
+        #sending_spt.start()
+
 def main(net):
     my_interfaces = net.interfaces()
     mymacs = [intf.ethaddr for intf in my_interfaces]
     fw_mode = {intf.name: True for intf in my_interfaces}
-    root_intf = None #none indicates we think we are the root
+    root_intf = None #none indicates we think we are the root, otherwise the the interface that has the root
     fw_tbl = []  # this is where we will maintain our forward table
 
     spt_root, packet = initialize_stp(my_interfaces)
@@ -124,18 +156,13 @@ def main(net):
         net.send_packet(intf.name, packet)
 
     # start timer to automatically send pkt every 2 seconds
-    #sending_spt = RepeatedTimer(2, send_spt, root_id=spt_root,
-    #                            hops=0, fw_mode=fw_mode, net=net,
-    #                            my_interfaces=my_interfaces)
+    sending_timer = RepeatedTimer(2, send_spt, root_id=spt_root,
+                                  hops=0, fw_mode=fw_mode, net=net,
+                                  my_interfaces=my_interfaces)
     while True:
         try:
-            #stop sending stp if we are no longer the root
-            if root_intf:
-                a=1
-                #sending_spt.stop()
-            else:
-                a=1 #this is hear to avoid syntax failures
-                #sending_spt.start()
+            spt_send_if_root(sending_timer, root_intf)
+
             timestamp,input_port,packet = net.recv_packet()
         except NoPackets:
             continue
@@ -145,7 +172,8 @@ def main(net):
         print("~~")
         print("Packet sent from {} on input_port={} destined for: {}".format(packet[0].src, input_port, packet[0].dst))
         if packet.get_header_by_name('SpanningTreeMessage'):
-            stp_root, root_intf  = handle_stp(packet, stp_root, fw_mode) #modifies fw_mode
+            stp_root, root_intf  = handle_stp(packet, stp_root=stp_root, fw_mode=fw_mode,
+                                              root_intf=root_intf, input_intf=input_port) #modifies fw_mode
         elif packet[0].dst in mymacs:
             print("Packet intended for me. Just drop it")
         else:
