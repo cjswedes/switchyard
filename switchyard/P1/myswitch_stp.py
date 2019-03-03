@@ -6,8 +6,33 @@ in it, not a learning switch.  (I.e., it's currently a switch
 that doesn't learn.)
 '''
 from switchyard.lib.userlib import *
-from spanningtreemessage import SpanningTreeMessage
 from myswitchstp_test_release import mk_stp_pkt
+from threading import Timer
+
+class RepeatedTimer(object):
+    def __init__(self, interval, function, *args, **kwargs):
+        self._timer     = None
+        self.interval   = interval
+        self.function   = function
+        self.args       = args
+        self.kwargs     = kwargs
+        self.is_running = False
+        self.start()
+
+    def _run(self):
+        self.is_running = False
+        self.start()
+        self.function(*self.args, **self.kwargs)
+
+    def start(self):
+        if not self.is_running:
+            self._timer = Timer(self.interval, self._run)
+            self._timer.start()
+            self.is_running = True
+
+    def stop(self):
+        self._timer.cancel()
+        self.is_running = False
 
 class TableEntry():
     def __init__(self, intf, mac, timestamp):
@@ -72,20 +97,43 @@ def initialize_stp(interfaces):
 def handle_stp(pkt):
     return
 
+'''
+This is run every two seconds, by the timer.
+it should be stopped if you are no longer the root
+'''
+def send_spt(root_id, hops, my_interfaces, fw_mode, net):
+    pkt = mk_stp_pkt(root_id=root_id, hops=hops)
+    for intf in my_interfaces:
+        print("Flooding STP with root {} and steps {}".format(pkt[1].root, pkt[1].hops_to_root))
+        net.send_packet(intf.name, pkt)
+        fw_mode[intf.name]=True
+
 def main(net):
     my_interfaces = net.interfaces()
     mymacs = [intf.ethaddr for intf in my_interfaces]
+    fw_mode = {intf.name: True for intf in my_interfaces}
+    root_intf = None #none indicates we think we are the root
     fw_tbl = []  # this is where we will maintain our forward table
 
-    spt_id, packet = initialize_stp(my_interfaces)
+    spt_root, packet = initialize_stp(my_interfaces)
 
     # flood stp packet to all links
     for intf in my_interfaces:
-        print("Flooding STP with root {} and steps {}".format(packet[1]._root, packet[1]._hops_to_root))
+        print("Flooding STP with root {} and steps {}".format(packet.get_header_by_name('SpanningTreeMessage').root,
+                                                              packet.get_header_by_name('SpanningTreeMessage').hops_to_root))
         net.send_packet(intf.name, packet)
 
+    # start timer to automatically send pkt every 2 seconds
+    sending_spt = RepeatedTimer(2, send_spt, root_id=spt_root,
+                                hops=0, fw_mode=fw_mode, net=net,
+                                my_interfaces=my_interfaces)
     while True:
         try:
+            #stop sending stp if we are no longer the root
+            if root_intf:
+                sending_spt.stop()
+            else:
+                sending_spt.start()
             timestamp,input_port,packet = net.recv_packet()
         except NoPackets:
             continue
@@ -94,8 +142,8 @@ def main(net):
 
         print("~~")
         print("Packet sent from {} on input_port={} destined for: {}".format(packet[0].src, input_port, packet[0].dst))
-        if isinstance(packet, SpanningTreeMessage):
-            handle_stp(packet)
+        if packet.get_header_by_name('SpanningTreeMessage'):
+            stp_root, root_intf  = handle_stp(packet, stp_root, fw_mode) #modifies fw_mode
         elif packet[0].dst in mymacs:
             print("Packet intended for me. Just drop it")
         else:
