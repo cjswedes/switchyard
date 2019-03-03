@@ -14,14 +14,22 @@ class TableEntry():
         self.timestamp = timestamp
 
 def get_table_entry(fw_table, interface):
-    return
-    #TODO return the table entry if iit exists
-    # should return the index of the entry or false if there isn't an entry
+    # TODO return the table entry if it exists
+    #  should return the index of the entry or false if there isn't an entry
+    #  return {entry, index}
+    print("GET_TABLE_ENTRY : {} : {}".format(fw_table, interface))
+    for i in range(len(fw_table)):
+        print("   fw_table[{}]={}".format(i,fw_table[i]))
+        if fw_table[i].intf == interface:
+            return fw_table[i],i
+
+    return False, 0
 
 
 def insert_table_entry(fw_table, entry: TableEntry, index_to_remove):
+    # TODO: this maintains the LRU format of the table
     return
-    #TODO: this maintains the LRU format of the tablle
+
 
 def main(net):
     my_interfaces = net.interfaces()
@@ -50,9 +58,9 @@ def main(net):
             else:
                 insert_table_entry(fw_tbl, new_entry, index)
 
-            #this is simply doing the broadcast since we dont know the MAC
-            for intf in my_interfaces:
-                if input_port != intf.name:
-                    print("Flooding packet {} to {}".format(packet, intf.name))
-                    net.send_packet(intf.name, packet)
+                #this is simply doing the broadcast since we dont know the MAC
+                for intf in my_interfaces:
+                    if input_port != intf.name:
+                        print("Flooding packet {} to {}".format(packet, intf.name))
+                        net.send_packet(intf.name, packet)
     net.shutdown()
