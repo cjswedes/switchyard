@@ -134,7 +134,7 @@ def main(net):
                 a=1
                 #sending_spt.stop()
             else:
-                a=1
+                a=1 #this is hear to avoid syntax failures
                 #sending_spt.start()
             timestamp,input_port,packet = net.recv_packet()
         except NoPackets:
