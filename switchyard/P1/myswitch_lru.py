@@ -37,11 +37,14 @@ def insert_table_entry(fw_table, entry: TableEntry, index, ifDst):
     if index >= 0:
         # Update table
         if ifDst:
-            fw_table.pop(0)
+            fw_table.pop(index)
             fw_table.append(entry)
         else:
-            fw_table.pop(index)
-            fw_table[index].intf = entry.intf
+            if fw_table[index].intf != entry.intf:
+                fw_table[index].intf = entry.intf
+            else:
+                fw_table.pop(index)
+                fw_table.append(entry)
     elif index == -1:
         # Add New Entry
         if len(fw_table) <= 5:
