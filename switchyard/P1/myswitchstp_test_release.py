@@ -72,6 +72,14 @@ def hub_tests():
     s.expect(PacketOutputEvent("eth0", reqpkt, display=Ethernet),
              "Ethernet frame destined for 70:00:00:00:00:01 should be flooded out eth0")
 
+    #ADD FOR TESTING
+    ippkt = IPv4(src='192.168.1.100', dst='172.16.42.2', protocol=IPProtocol.ICMP, ttl=32)
+    icmppkt = ICMP()
+    icmppkt.icmptype = ICMPType.EchoRequest
+    reqpkt = ippkt + icmppkt
+    s.expect(PacketInputEvent("eth2", reqpkt, display=Ethernet),
+             "Bad Packet")
+
     return s
 
 
