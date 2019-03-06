@@ -125,7 +125,7 @@ def main(net):
     fw_tbl = []  # this is where we will maintain our forward table
 
     # Switch STP variables
-    stp_root, packet = initialize_stp(my_interfaces)     # stp_root = id of root
+    stp_root, packet = initialize_stp(my_interfaces)     # stp_root = root id
     this_id = stp_root
     root_intf = None  # none indicates we think we are the root
     this_hops_to_root = 0
@@ -194,21 +194,23 @@ def main(net):
             # if packet_id == root_id
             elif packet_header.root == stp_root:
                 print("PACKET==ROOT")
-                if this_hops_to_root + 1 < packet_header.hops_to_root:
+                if packet_header.hops_to_root + 1 < this_hops_to_root:
                     print("ROOT[{}] +1 < PACKET[{}]".format(this_hops_to_root, packet_header.hops_to_root))
                     # increment hops by 1
                     packet.get_header_by_name('SpanningTreeMessage').hops_to_root = packet_header.hops_to_root + 1
                     # update packet info {intf set to forwarding mode, record incr hops}
                     this_hops_to_root = packet_header.hops_to_root + 1
+                    fw_mode[input_port] = True
 
                     # forward all packets on except root intf
-                    broadcast(my_interfaces, packet, input_port, net)
+                    packet[0].src = this_id
+                    broadcast(my_interfaces, packet, input_port, net, fw_mode)
 
-                elif this_hops_to_root + 1 > packet_header.hops_to_root:
+                elif packet_header.hops_to_root + 1 > this_hops_to_root:
                     print("ROOT[{}] +1 > PACKET[{}]".format(this_hops_to_root, packet_header.hops_to_root))
                     # IGNORE
                     a=1
-                elif this_hops_to_root + 1 == packet_header.hops_to_root:
+                elif packet_header.hops_to_root + 1 == this_hops_to_root and input_port != root_intf:
                     print("ROOT[{}] +1 == PACKET[{}]".format(this_hops_to_root, packet_header.hops_to_root))
                     # set interface of arrival to blocking mode
                     fw_mode[input_port] = False
