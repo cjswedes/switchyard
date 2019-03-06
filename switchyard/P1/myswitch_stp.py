@@ -6,8 +6,8 @@ in it, not a learning switch.  (I.e., it's currently a switch
 that doesn't learn.)
 '''
 from switchyard.lib.userlib import *
-from myswitchstp_test_release import mk_stp_pkt
 from threading import Timer
+from spanningtreemessage import SpanningTreeMessage
 
 
 class RepeatedTimer(object):
@@ -42,6 +42,15 @@ class TableEntry():
         self.mac = mac
         self.timestamp = timestamp
 
+def mk_stp_pkt(root_id, hops, hwsrc="20:00:00:00:00:01", hwdst="ff:ff:ff:ff:ff:ff"):
+    spm = SpanningTreeMessage(root=root_id, hops_to_root=hops)
+    Ethernet.add_next_header_class(EtherType.SLOW, SpanningTreeMessage)
+    pkt = Ethernet(src=hwsrc,
+                   dst=hwdst,
+                   ethertype=EtherType.SLOW) + spm
+    xbytes = pkt.to_bytes()
+    p = Packet(raw=xbytes)
+    return p
 
 def handle_table_entry(fw_table, pkt, input_port, timestamp):
     src_exists = False
@@ -117,7 +126,7 @@ def initialize_stp(interfaces):
             curr = intf.ethaddr.toStr()
 
     #create stp packet, ethernet src and dst dont matter
-    pkt = mk_stp_pkt(root_id=curr, hops=0) # root expects string not EthAddr object
+    pkt = mk_stp_pkt(root_id=curr, hops=0, hwsrc=curr) # root expects string not EthAddr object
     return curr, pkt
 
 
@@ -126,8 +135,9 @@ def send_stp(root_id, hops, my_interfaces, fw_mode, net):
     This is run every two seconds, by the timer.
     it should be stopped if you are no longer the root
     '''
-    pkt = mk_stp_pkt(root_id=root_id, hops=hops)
+
     for intf in my_interfaces:
+        pkt = mk_stp_pkt(root_id=root_id, hops=hops, hwsrc=root_id)
         net.send_packet(intf.name, pkt)
         fw_mode[intf.name]=True
     return
