@@ -182,7 +182,7 @@ def main(net):
                 # increment hops by 1 of packet
                 packet.get_header_by_name('SpanningTreeMessage').hops_to_root = packet_header.hops_to_root + 1
                 # update packet info {record incr hops, intf set to forwarding mode}
-                this_hops_to_root = packet_header.hops_to_root + 1
+                this_hops_to_root = packet.get_header_by_name('SpanningTreeMessage').hops_to_root
                 fw_mode[input_port] = True
                 stp_root = stp_root_new
                 if stp_root == this_id:
@@ -198,11 +198,11 @@ def main(net):
             elif packet_header.root == stp_root:
                 print("PACKET==ROOT")
                 if packet_header.hops_to_root + 1 < this_hops_to_root:
-                    print("ROOT[{}] +1 < PACKET[{}]".format(this_hops_to_root, packet_header.hops_to_root))
+                    print("1ROOT[{}] +1 < PACKET[{}]".format(this_hops_to_root, packet_header.hops_to_root))
                     # increment hops by 1
                     packet.get_header_by_name('SpanningTreeMessage').hops_to_root = packet_header.hops_to_root + 1
                     # update packet info {intf set to forwarding mode, record incr hops}
-                    this_hops_to_root = packet_header.hops_to_root + 1
+                    this_hops_to_root = packet.get_header_by_name('SpanningTreeMessage').hops_to_root
                     fw_mode[input_port] = True
 
                     # forward all packets on except root intf
@@ -210,11 +210,13 @@ def main(net):
                     broadcast(my_interfaces, packet, input_port, net, fw_mode)
 
                 elif packet_header.hops_to_root + 1 > this_hops_to_root:
-                    print("ROOT[{}] +1 > PACKET[{}]".format(this_hops_to_root, packet_header.hops_to_root))
+                    print("2ROOT[{}] +1 > PACKET[{}]".format(this_hops_to_root, packet_header.hops_to_root))
                     # IGNORE
                     a=1
-                elif packet_header.hops_to_root + 1 == this_hops_to_root and input_port != root_intf:
-                    print("ROOT[{}] +1 == PACKET[{}]".format(this_hops_to_root, packet_header.hops_to_root))
+                elif packet_header.hops_to_root + 1 == this_hops_to_root: # and input_port != root_intf:
+                    print("BLOCKING BLOCK")
+                    print("   ROOT[{}] +1 == PACKET[{}]".format(this_hops_to_root, packet_header.hops_to_root))
+                    print("   INPUT[{}] != ROOT_INTF[{}]".format(input_port, root_intf))
                     # set interface of arrival to blocking mode
                     fw_mode[input_port] = False
 
