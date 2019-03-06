@@ -12,3 +12,9 @@ the lru implementation.
 I am unsure how too use switchyard with mininet.
 We will probably have to figure it out for the spanning tree
 testing.
+
+Test cases for lru:
+* What if an invalid packet is sent to our network...wrong headers etc
+
+Test cases for STP:
+* who the fuck knows Im tired.
