@@ -181,7 +181,11 @@ def main(net):
                 # update packet info {record incr hops, intf set to forwarding mode}
                 this_hops_to_root = packet_header.hops_to_root + 1
                 fw_mode[input_port] = True
-                ## stp_root = stp_root_new  ==>> I'm positive we need this but tryna debug why the updating now
+                stp_root = stp_root_new
+                if stp_root == this_id:
+                    root_intf = None
+                else:
+                    root_intf = input_port
                 # forward all packets on except input
                 print("BROADCAST1")
                 packet[0].src = this_id

@@ -56,11 +56,11 @@ def hub_tests():
     stp_pkt = mk_stp_pkt('10:00:00:00:00:01', 2, hwsrc="20:00:00:00:00:01", hwdst="ff:ff:ff:ff:ff:ff")
     s.expect(PacketOutputEvent("eth1", stp_pkt, "eth2", stp_pkt), "Expecting STP packets to be broadcasted")
 
-    # 8. Receive new stp with bigger root.
+    #8. Receive new stp with bigger root.
     stp_pkt = mk_stp_pkt('30:00:00:00:00:01', 0, hwsrc="30:00:00:00:00:01", hwdst="ff:ff:ff:ff:ff:ff")
     s.expect(PacketInputEvent("eth1", stp_pkt), "Expecting STP packets on eth1: action to be discarded")
 
-    #6. Receive new stp with same root and same hops. The port should go in to blocking mode.
+    #9. Receive new stp with same root and same hops. The port should go in to blocking mode.
     stp_pkt = mk_stp_pkt('10:00:00:00:00:01', 1, hwsrc="10:00:00:00:00:01", hwdst="ff:ff:ff:ff:ff:ff")
     s.expect(PacketInputEvent("eth1", stp_pkt), "Expecting STP packets on eth1 with same root and hops")
     # ------------------------------------------------------------------------------------------------------------
