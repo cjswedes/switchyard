@@ -75,12 +75,6 @@ def main(net):
         if packet[0].dst in mymacs:
             print("Packet intended for me. Just drop it")
         else:
-            #new_src_entry = TableEntry(input_port, packet[0].src, timestamp)
-
-            #src_entry, src_index = get_table_entry(fw_tbl, packet[0].src)
-            #dst_entry, dst_index = get_table_entry(fw_tbl, packet[0].dst)
-
-            #insert_table_entry(fw_tbl, new_src_entry, src_index, False)
             dst_known = handle_table_entry(fw_tbl, packet, input_port, timestamp)
             if dst_known:
                 print("We know destination so forward")

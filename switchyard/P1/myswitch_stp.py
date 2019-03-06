@@ -40,49 +40,49 @@ class TableEntry():
         self.mac = mac
         self.timestamp = timestamp
 
-def get_table_entry(fw_table, address):
-    '''
-    should return the index of the entry or false if there isn't an entry
-    Return: {entry, index}
-    '''
-    print("GET_TABLE_ENTRY") # : {} : {}".format(fw_table, interface))
+def handle_table_entry(fw_table, pkt, input_port, timestamp):
+    print("GET_TABLE_ENTRY")  # : {} : {}".format(fw_table, interface))
+    src_exists = False
+    dst_exists = False
     for i in range(len(fw_table)):
-        if fw_table[i].mac == address:
-            return fw_table[i],i
-
-    return False, -1
-
-def insert_table_entry(fw_table, entry: TableEntry, index, ifDst):
-    '''Parameters:
-           index: -1 if not in table, else 0-4
-           ifDst: automatically Most Recently Used if dst, False if src
-      LRU: [Least Recent, ... ,Most Recent]
-      Return: none
-    '''
-    print("INSERT_TABLE_ENTRY : index={} : len={}".format(index, len(fw_table)))
-
-    if index >= 0:
-        # Update table
-        if ifDst:
-            fw_table.pop(0)
-            fw_table.append(entry)
-        else:
-            if fw_table[index].intf == entry.intf:
-                fw_table.pop(index)
-                fw_table[index].intf = entry.intf
-            else:
-                fw_table[index]
-    elif index == -1:
-        # Add New Entry
-        if len(fw_table) <= 5:
-            fw_table.append(entry)
-        else:
-            # Remove LRU & Add
-            fw_table.pop(0)
-            fw_table.append(entry)
+        if fw_table[i].mac == pkt[0].src:
+            src_exists = True
+            index = i
+    if src_exists:
+        if input_port != fw_table[index]:
+            fw_table[index].intf = input_port
+            fw_table[index].timestamp = timestamp
+        #dst decision
+        for i in range(len(fw_table)):
+            if fw_table[i].mac == pkt[0].dst:
+                dst_exists = True
+                index = i
+        if dst_exists:
+            fw_table.append(fw_table.pop(index))
+        return dst_exists
     else:
-        print("ERROR")
-    return
+        if len(fw_table) < 5:
+            fw_table.append(TableEntry(intf=input_port, mac=pkt[0].src, timestamp=timestamp))
+            #dst decision
+            for i in range(len(fw_table)):
+                if fw_table[i].mac == pkt[0].dst:
+                    dst_exists = True
+                    index = i
+            if dst_exists:
+                fw_table.append(fw_table.pop(index))
+            return dst_exists
+        else:
+            fw_table.pop(0)
+            fw_table.append(TableEntry(intf=input_port, mac=pkt[0].src, timestamp=timestamp))
+            # dst decision
+            for i in range(len(fw_table)):
+                if fw_table[i].mac == pkt[0].dst:
+                    dst_exists = True
+                    index = i
+            if dst_exists:
+                fw_table.append(fw_table.pop(index))
+            return dst_exists
+
 
 def broadcast(interfaces, packet, input_port, net, fw_mode):
     for intf in interfaces:
@@ -223,19 +223,11 @@ def main(net):
         elif packet[0].dst in mymacs:
             print("Packet intended for me. Just drop it")
         else:
-            new_src_entry = TableEntry(input_port, packet[0].src, timestamp)
+            dst_known = handle_table_entry(fw_tbl, packet, input_port, timestamp)
 
-            src_entry, src_index = get_table_entry(fw_tbl, packet[0].src)
-            dst_entry, dst_index = get_table_entry(fw_tbl, packet[0].dst)
-
-            insert_table_entry(fw_tbl, new_src_entry, src_index, False)
-
-            if dst_entry:
+            if dst_known:
                 print("We know destination so forward")
-                net.send_packet(dst_entry.intf, packet)
-                # update dst entry in table
-                dst_entry.timestamp = timestamp
-                insert_table_entry(fw_tbl, dst_entry, dst_index, True)
+                net.send_packet(fw_tbl[len(fw_tbl)-1].intf, packet)
             else:
                 # this is simply doing the broadcast since we don't know the MAC
                 broadcast(my_interfaces, packet, input_port, net, fw_mode)
