@@ -82,6 +82,11 @@ def insert_table_entry(fw_table, entry: TableEntry, index, ifDst):
     return
 
 def initialize_stp(interfaces):
+    '''
+    Finds initial root and creates packet to be flooded
+    :param interfaces: known interfaces/ports
+    :return: curr (current root) pkt (packet to be flooded)
+    '''
     print("Initializing!!!")
     #find smallest mac in interfaces for id
     curr = interfaces[0].ethaddr.toStr() if len(interfaces) > 0 else None
@@ -91,22 +96,24 @@ def initialize_stp(interfaces):
 
     #create stp packet, ethernet src and dst dont matter
     pkt = mk_stp_pkt(root_id=curr, hops=0) # root expects string not EthAddr object
-    print("id: {}\npacket: {}".format(curr, bool(pkt)))
+    print("id: {} packet: {}".format(curr, bool(pkt)))
     return curr, pkt
 
-def handle_stp(pkt):
-    return
+def handle_stp(packet, stp_root, fw_mode):
+    stp_intf = stp_root
+    return stp_root, stp_intf
 
 '''
 This is run every two seconds, by the timer.
 it should be stopped if you are no longer the root
 '''
-def send_spt(root_id, hops, my_interfaces, fw_mode, net):
+def send_stp(root_id, hops, my_interfaces, fw_mode, net):
     pkt = mk_stp_pkt(root_id=root_id, hops=hops)
     for intf in my_interfaces:
         print("Flooding STP with root {} and steps {}".format(pkt[1].root, pkt[1].hops_to_root))
         net.send_packet(intf.name, pkt)
         fw_mode[intf.name]=True
+    return
 
 def main(net):
     my_interfaces = net.interfaces()
@@ -115,7 +122,7 @@ def main(net):
     root_intf = None #none indicates we think we are the root
     fw_tbl = []  # this is where we will maintain our forward table
 
-    spt_root, packet = initialize_stp(my_interfaces)
+    stp_root, packet = initialize_stp(my_interfaces)
 
     # flood stp packet to all links
     for intf in my_interfaces:
@@ -124,18 +131,17 @@ def main(net):
         net.send_packet(intf.name, packet)
 
     # start timer to automatically send pkt every 2 seconds
-    #sending_spt = RepeatedTimer(2, send_spt, root_id=spt_root,
-    #                            hops=0, fw_mode=fw_mode, net=net,
-    #                            my_interfaces=my_interfaces)
+    sending_spt = RepeatedTimer(interval=2, function=send_stp, root_id=stp_root, hops=0, fw_mode=fw_mode, net=net,
+                                my_interfaces=my_interfaces)
     while True:
         try:
             #stop sending stp if we are no longer the root
             if root_intf:
                 a=1
-                #sending_spt.stop()
+                sending_spt.stop()
             else:
                 a=1 #this is hear to avoid syntax failures
-                #sending_spt.start()
+                sending_spt.start()
             timestamp,input_port,packet = net.recv_packet()
         except NoPackets:
             continue
@@ -145,7 +151,7 @@ def main(net):
         print("~~")
         print("Packet sent from {} on input_port={} destined for: {}".format(packet[0].src, input_port, packet[0].dst))
         if packet.get_header_by_name('SpanningTreeMessage'):
-            stp_root, root_intf  = handle_stp(packet, stp_root, fw_mode) #modifies fw_mode
+            stp_root, root_intf = handle_stp(packet, stp_root, fw_mode) #modifies fw_mode
         elif packet[0].dst in mymacs:
             print("Packet intended for me. Just drop it")
         else:
