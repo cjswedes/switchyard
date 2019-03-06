@@ -122,22 +122,24 @@ def initialize_stp(interfaces):
     #find smallest mac in interfaces for id
     curr = interfaces[0].ethaddr.toStr() if len(interfaces) > 0 else None
     for intf in interfaces:
+        if intf.name == "eth0":
+            eth0_mac = intf.ethaddr.toStr()
         if intf.ethaddr.toStr() < curr:
             curr = intf.ethaddr.toStr()
 
     #create stp packet, ethernet src and dst dont matter
-    pkt = mk_stp_pkt(root_id=curr, hops=0, hwsrc=curr) # root expects string not EthAddr object
-    return curr, pkt
+    pkt = mk_stp_pkt(root_id=curr, hops=0, hwsrc=eth0_mac, hwdst="ff:ff:ff:ff:ff:ff") # root expects string not EthAddr object
+    return curr, eth0_mac, pkt
 
 
-def send_stp(root_id, hops, my_interfaces, fw_mode, net):
+def send_stp(root_id, hops, my_interfaces, fw_mode, net, eth0_mac):
     '''
     This is run every two seconds, by the timer.
     it should be stopped if you are no longer the root
     '''
 
     for intf in my_interfaces:
-        pkt = mk_stp_pkt(root_id=root_id, hops=hops, hwsrc=root_id)
+        pkt = mk_stp_pkt(root_id=root_id, hops=hops, hwsrc=eth0_mac, hwdst="ff:ff:ff:ff:ff:ff")
         net.send_packet(intf.name, pkt)
         fw_mode[intf.name]=True
     return
@@ -150,7 +152,7 @@ def main(net):
     fw_tbl = []  # this is where we will maintain our forward table
 
     # Switch STP variables
-    stp_root, packet = initialize_stp(my_interfaces)     # stp_root = root id
+    stp_root, eth0_mac, packet = initialize_stp(my_interfaces)     # stp_root = root id
     this_id = stp_root
     root_intf = None  # none indicates we think we are the root
     this_hops_to_root = 0
@@ -162,7 +164,7 @@ def main(net):
 
     # start timer to automatically send pkt every 2 seconds
     sending_stp = RepeatedTimer(interval=2, function=send_stp, root_id=stp_root, hops=0, fw_mode=fw_mode, net=net,
-                                my_interfaces=my_interfaces)
+                                my_interfaces=my_interfaces, eth0_mac=eth0_mac)
     while True:
         try:
             # stop sending stp if we are no longer the root
