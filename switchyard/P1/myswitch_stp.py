@@ -71,7 +71,7 @@ def handle_table_entry(fw_table, pkt, input_port, timestamp):
         if dst_exists:
             fw_table.append(fw_table.pop(index))
         return dst_exists
-    else:m
+    else:
         if len(fw_table) < 5:
             fw_table.append(TableEntry(intf=input_port, mac=pkt[0].src, timestamp=timestamp))
             #dst decision
