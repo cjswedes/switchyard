@@ -53,10 +53,10 @@ class Router(object):
             for intf in self.interfaces:
                 if intf.ipaddr == arp.targetprotoaddr:
                     # TODO: are senders and targets backwards?
-                    reply = create_ip_arp_reply(senderhwaddr=arp.senderhwaddr,
-                                                senderprotoaddr=arp.senderprotoaddr,
-                                                targethwaddr=intf.ethaddr,
-                                                targetprotoaddr=arp.targetprotoaddr)
+                    reply = create_ip_arp_reply(srchw=intf.ethaddr,
+                                                srcip=arp.targetprotoaddr,
+                                                dsthw=arp.senderhwaddr,
+                                                targetip=arp.senderprotoaddr)
                     self.net.send_packet(input_port, reply)
             return #drop packet if we dont have the IP on this router
         else: #we received a reply
