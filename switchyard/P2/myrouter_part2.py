@@ -62,15 +62,34 @@ class Router(object):
                 # dst Host or IP Address on the router
         entry = self.fwd_tbl.lookup(int(ip_pkt.dst))
 
-        if self.arp_tbl.lookup(entry.prefix) != 0:  # use ARP entry existing
+        if not self.arp_tbl.lookup(entry.prefix):  # use ARP entry existing
             pkt_header = Ethernet(src=int(ip_pkt.src),
                                   dst=int(self.arp_tbl.lookup(entry.prefix)),
                                   ethertype=EtherType.SLOW)
             # TODO send IPv4 packet out
             # TODO update time of use for this ARP entry
-        else:  # send ARP request
+        elif not entry.next_hop:
+            incoming_intf = None
+            for intf in self.interfaces:
+                if intf.name == input_port:
+                    incoming_intf = intf
+            request = create_ip_arp_request(srchw=incoming_intf.ethaddr,
+                                            srcip=incoming_intf.ipaddr,
+                                            targetip=ip_pkt.dst)
+            self.net.send_packet(input_port, request)
+        else:  # send ARP request to all other ports
             a=1
-            #request = create_ip_arp_request(ip_pkt.dst, ip_pkt.src, entry.prefix)
+            incoming_intf = None
+            for intf in self.interfaces:
+                if intf.name == input_port:
+                    incoming_intf = intf
+            request = create_ip_arp_request(srchw=incoming_intf.ethaddr,
+                                            srcip=incoming_intf.ipaddr,
+                                            targetip=ip_pkt.dst)
+            for intf in self.interfaces:
+                if intf.name == input_port:
+                    continue
+                self.net.send_packet(intf.name, request)
 
 
         return
