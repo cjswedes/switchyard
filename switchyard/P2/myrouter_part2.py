@@ -49,9 +49,9 @@ class Router(object):
                 if pkt.get_header(Arp):
                     self.handle_arp(pkt.get_header(Arp), input_port, timestamp)
                 if pkt.get_header(IPv4):
-                    self.handle_IPv4(pkt.get_header(IPv4), input_port, timestamp)
+                    self.handle_IPv4(pkt, input_port, timestamp)
 
-    def handle_IPv4(self, ip_pkt, input_port, timestamp):
+    def handle_IPv4(self, full_pkt, input_port, timestamp):
         # be careful about what to do if you need to send an arp query
         # you should check out the FAQs questions 1, 3, and 4
 
@@ -60,29 +60,37 @@ class Router(object):
             # dst Ethernet MAC ~ host where needs to be forwarded
             # next hop host ~
                 # dst Host or IP Address on the router
-        entry = self.fwd_tbl.lookup(int(ip_pkt.dst))
+        ip_pkt = full_pkt.get_header(IPv4)
 
-        if not self.arp_tbl.lookup(entry.prefix):  # use ARP entry existing
-            pkt_header = Ethernet(src=int(ip_pkt.src),
-                                  dst=int(self.arp_tbl.lookup(entry.prefix)),
-                                  ethertype=EtherType.SLOW)
-            # TODO send IPv4 packet out
-            # TODO update time of use for this ARP entry
+        incoming_intf = self.get_interface(input_port)
+
+        entry = self.fwd_tbl.lookup(int(ip_pkt.dst))
+        #arp_entry = self.arp_tbl.lookup(ip_pkt.dst)
+
+        if entry and entry.next_hop:
+            arp_hop_entry = self.arp_tbl.lookup(entry.next_hop)
+            entry_intf = self.get_interface(entry.interface)
+            if arp_hop_entry:
+                # Create new Ethernet Header
+                eth_header = Ethernet(src=incoming_intf.ethaddr,
+                                      dst=arp_hop_entry.MAC,
+                                      ethertype=EtherType.SLOW)
+                full_pkt[0] = eth_header
+                self.net.send_packet(entry_intf.name, full_pkt)
+                # TODO update time of use for this ARP entry
+            else:
+                # send ARP request
+                request = create_ip_arp_request(srchw=entry_intf.ethaddr,
+                                                srcip=entry_intf.ipaddr,
+                                                targetip=entry.next_hop)
+                self.net.send_packet(entry_intf.name, request)
         elif not entry.next_hop:
-            incoming_intf = None
-            for intf in self.interfaces:
-                if intf.name == input_port:
-                    incoming_intf = intf
+
             request = create_ip_arp_request(srchw=incoming_intf.ethaddr,
                                             srcip=incoming_intf.ipaddr,
                                             targetip=ip_pkt.dst)
             self.net.send_packet(input_port, request)
         else:  # send ARP request to all other ports
-            a=1
-            incoming_intf = None
-            for intf in self.interfaces:
-                if intf.name == input_port:
-                    incoming_intf = intf
             request = create_ip_arp_request(srchw=incoming_intf.ethaddr,
                                             srcip=incoming_intf.ipaddr,
                                             targetip=ip_pkt.dst)
@@ -90,8 +98,6 @@ class Router(object):
                 if intf.name == input_port:
                     continue
                 self.net.send_packet(intf.name, request)
-
-
         return
 
     def handle_arp(self, arp, input_port, timestamp):
@@ -113,6 +119,12 @@ class Router(object):
                     self.arp_tbl.add(entry)
                     # self.arp_tbl[arp.targetprotoaddr] = arp.targethwaddr
             return
+
+    def get_interface(self, name):
+        for intf in self.interfaces:
+            if intf.name == name:
+                return intf
+        return None
 
 
 class ForwardTable(object):
@@ -192,7 +204,7 @@ class ArpTable(object):
         for entry in self.tbl:
             if entry.IP == ip:
                 return entry
-        return 0
+        return None
 
 
 class ArpEntry(object):
