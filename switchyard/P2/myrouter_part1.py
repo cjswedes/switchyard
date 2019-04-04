@@ -45,9 +45,9 @@ class Router(object):
             if len(self.pkt_queue) > 0:
                 pkt = self.pkt_queue.pop(0)
                 if pkt.get_header(Arp):
-                    self.handle_arp(pkt.get_header(Arp), input_port)
+                    self.handle_arp(pkt.get_header(Arp), input_port, timestamp)
 
-    def handle_arp(self, arp, input_port):
+    def handle_arp(self, arp, input_port, timestamp):
         if arp.operation == ArpOperation.Request:
             # check if the dest IP is in our interfaces
             for intf in self.interfaces:
@@ -62,8 +62,16 @@ class Router(object):
             for intf in self.interfaces:
                 if intf.ipaddr == arp.targetprotoaddr:
                     # update arp table on reply where the destination is us
-                    self.arp_tbl[arp.targetprotoaddr] = arp.targethwaddr
+                    entry = ArpEntry(arp.targetprotoaddr, arp.targethwaddr, timestamp)
+                    self.arp_tbl.append(entry)
+                    # self.arp_tbl[arp.targetprotoaddr] = arp.targethwaddr
             return
+
+class ArpEntry(object):
+    def __init__(self, IP, MAC, time_stamp):
+        self.IP = IP
+        self.MAC = MAC
+        self.time_stamp = time_stamp  # Should be an int
 
 
 def main(net):
