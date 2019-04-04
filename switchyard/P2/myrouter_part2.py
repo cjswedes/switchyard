@@ -45,12 +45,15 @@ class Router(object):
                 self.pkt_queue.append(PacketFwdInfo(pkt, input_port, timestamp))
                 log_debug("Got a packet: {}".format(str(pkt)))
 
-            if len(self.arp_wait_queue) > 0:
+            '''if len(self.arp_wait_queue) > 0:
                 pkt_info = self.arp_wait_queue.pop(0)
+                # TODO fix timestamp on ARP replies to reflect need
                 if (time.time() - pkt_info.arp_timestamp) > 1: #We have waited one second
                     new_pkt_info = self.handle_IPv4(pkt_info)
                     if new_pkt_info:
                         self.arp_wait_queue.append(new_pkt_info)
+                else:
+                    self.arp_wait_queue.append(pkt_info)'''
 
             if len(self.pkt_queue) > 0:
                 pkt_info = self.pkt_queue.pop(0)
@@ -58,6 +61,7 @@ class Router(object):
                     self.handle_arp(pkt_info.pkt.get_header(Arp), input_port, timestamp)
 
                 if pkt_info.pkt.get_header(IPv4):
+                    pkt_info.pkt.get_header(IPv4).ttl = pkt_info.pkt.get_header(IPv4).ttl - 1
                     new_pkt_info = self.handle_IPv4(pkt_info)
                     if new_pkt_info:
                         self.arp_wait_queue.append(new_pkt_info)
@@ -78,15 +82,14 @@ class Router(object):
         new_pkt_info = None
         #arp_entry = self.arp_tbl.lookup(ip_pkt.dst)
 
-
         if entry and entry.next_hop:
             arp_entry = self.arp_tbl.lookup(entry.next_hop)
             fwding_intf = self.get_interface(entry.interface)
             if arp_entry:
                 # Create new Ethernet Header
-                eth_header = Ethernet(src=incoming_intf.ethaddr,
+                eth_header = Ethernet(src=fwding_intf.ethaddr,  # incoming_inft prev
                                       dst=arp_entry.MAC,
-                                      ethertype=EtherType.SLOW)
+                                      ethertype=EtherType.IPv4)
                 full_pkt[0] = eth_header
                 self.net.send_packet(fwding_intf.name, full_pkt)
                 # TODO update time of use for this ARP entry
@@ -99,14 +102,14 @@ class Router(object):
                                              timestamp=pkt_info.timestamp,
                                              arp_attempts=pkt_info.arp_attempts + 1)
                 self.net.send_packet(fwding_intf.name, request)
-        elif not entry.next_hop:
+        elif entry and not entry.next_hop:
             arp_entry = self.arp_tbl.lookup(ip_pkt.dst)
             fwding_intf = self.get_interface(entry.interface)
             if (arp_entry):
                 # Create new Ethernet Header
-                eth_header = Ethernet(src=incoming_intf.ethaddr,
+                eth_header = Ethernet(src=fwding_intf.ethaddr,
                                       dst=arp_entry.MAC,
-                                      ethertype=EtherType.SLOW)
+                                      ethertype=EtherType.IPv4)
                 full_pkt[0] = eth_header
                 self.net.send_packet(fwding_intf.name, full_pkt)
             else:
@@ -137,15 +140,28 @@ class Router(object):
                                                 dsthw=arp.senderhwaddr,
                                                 targetip=arp.senderprotoaddr)
                     self.net.send_packet(input_port, reply)
-            return #drop packet if we dont have the IP on this router
-        else: #we received a reply
+            return  # drop packet if we dont have the IP on this router
+        else:  # we received a reply
             for intf in self.interfaces:
                 if intf.ipaddr == arp.targetprotoaddr:
                     # update arp table on reply where the destination is us
-                    entry = ArpEntry(arp.targetprotoaddr, arp.targethwaddr, timestamp)
+                    entry = ArpEntry(arp.senderprotoaddr, arp.senderhwaddr, timestamp)
                     self.arp_tbl.add(entry)
                     # self.arp_tbl[arp.targetprotoaddr] = arp.targethwaddr
+
+            # check if reply was needed for IPv4 pkt
+            self.handle_waitIPv4()
             return
+
+    def handle_waitIPv4(self):
+        # check if ARP response correlates to one of the waiting packets & process
+        # TODO add timeout handle chain
+        while len(self.arp_wait_queue) > 0:
+            pkt_waiting = self.arp_wait_queue.pop()
+            new_pkt_info = self.handle_IPv4(pkt_waiting)
+            if new_pkt_info:
+                self.arp_wait_queue.append(new_pkt_info)
+        return
 
     def get_interface(self, name):
         for intf in self.interfaces:
