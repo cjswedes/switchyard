@@ -16,6 +16,7 @@ class Router(object):
     def __init__(self, net):
         self.net = net
         self.pkt_queue = []
+        self.arp_wait_queue = []
         # Ip addresses are keys and
         self.arp_tbl = ArpTable()
         self.fwd_tbl = ForwardTable(net)
@@ -41,17 +42,27 @@ class Router(object):
 
             # simply add the packet to the queue to be processed
             if gotpkt:
-                self.pkt_queue.append(pkt)
+                self.pkt_queue.append(PacketFwdInfo(pkt, input_port, timestamp))
                 log_debug("Got a packet: {}".format(str(pkt)))
 
-            if len(self.pkt_queue) > 0:
-                pkt = self.pkt_queue.pop(0)
-                if pkt.get_header(Arp):
-                    self.handle_arp(pkt.get_header(Arp), input_port, timestamp)
-                if pkt.get_header(IPv4):
-                    self.handle_IPv4(pkt, input_port, timestamp)
+            if len(self.arp_wait_queue) > 0:
+                pkt_info = self.arp_wait_queue.pop(0)
+                if (time.time() - pkt_info.arp_timestamp) > 1: #We have waited one second
+                    new_pkt_info = self.handle_IPv4(pkt_info)
+                    if new_pkt_info:
+                        self.arp_wait_queue.append(new_pkt_info)
 
-    def handle_IPv4(self, full_pkt, input_port, timestamp):
+            if len(self.pkt_queue) > 0:
+                pkt_info = self.pkt_queue.pop(0)
+                if pkt_info.pkt.get_header(Arp):
+                    self.handle_arp(pkt_info.pkt.get_header(Arp), input_port, timestamp)
+
+                if pkt_info.pkt.get_header(IPv4):
+                    new_pkt_info = self.handle_IPv4(pkt_info)
+                    if new_pkt_info:
+                        self.arp_wait_queue.append(new_pkt_info)
+
+    def handle_IPv4(self, pkt_info):
         # be careful about what to do if you need to send an arp query
         # you should check out the FAQs questions 1, 3, and 4
 
@@ -60,45 +71,61 @@ class Router(object):
             # dst Ethernet MAC ~ host where needs to be forwarded
             # next hop host ~
                 # dst Host or IP Address on the router
+        full_pkt = pkt_info.pkt
         ip_pkt = full_pkt.get_header(IPv4)
-
-        incoming_intf = self.get_interface(input_port)
-
-        entry = self.fwd_tbl.lookup(int(ip_pkt.dst))
+        incoming_intf = self.get_interface(pkt_info.input_port)
+        entry = self.fwd_tbl.lookup(ip_pkt.dst)
+        new_pkt_info = None
         #arp_entry = self.arp_tbl.lookup(ip_pkt.dst)
 
+
         if entry and entry.next_hop:
-            arp_hop_entry = self.arp_tbl.lookup(entry.next_hop)
-            entry_intf = self.get_interface(entry.interface)
-            if arp_hop_entry:
+            arp_entry = self.arp_tbl.lookup(entry.next_hop)
+            fwding_intf = self.get_interface(entry.interface)
+            if arp_entry:
                 # Create new Ethernet Header
                 eth_header = Ethernet(src=incoming_intf.ethaddr,
-                                      dst=arp_hop_entry.MAC,
+                                      dst=arp_entry.MAC,
                                       ethertype=EtherType.SLOW)
                 full_pkt[0] = eth_header
-                self.net.send_packet(entry_intf.name, full_pkt)
+                self.net.send_packet(fwding_intf.name, full_pkt)
                 # TODO update time of use for this ARP entry
             else:
                 # send ARP request
-                request = create_ip_arp_request(srchw=entry_intf.ethaddr,
-                                                srcip=entry_intf.ipaddr,
+                request = create_ip_arp_request(srchw=fwding_intf.ethaddr,
+                                                srcip=fwding_intf.ipaddr,
                                                 targetip=entry.next_hop)
-                self.net.send_packet(entry_intf.name, request)
+                new_pkt_info = PacketFwdInfo(pkt=full_pkt, input_port=pkt_info.input_port,
+                                             timestamp=pkt_info.timestamp,
+                                             arp_attempts=pkt_info.arp_attempts + 1)
+                self.net.send_packet(fwding_intf.name, request)
         elif not entry.next_hop:
-
-            request = create_ip_arp_request(srchw=incoming_intf.ethaddr,
-                                            srcip=incoming_intf.ipaddr,
+            arp_entry = self.arp_tbl.lookup(ip_pkt.dst)
+            fwding_intf = self.get_interface(entry.interface)
+            if (arp_entry):
+                # Create new Ethernet Header
+                eth_header = Ethernet(src=incoming_intf.ethaddr,
+                                      dst=arp_entry.MAC,
+                                      ethertype=EtherType.SLOW)
+                full_pkt[0] = eth_header
+                self.net.send_packet(fwding_intf.name, full_pkt)
+            else:
+                request = create_ip_arp_request(srchw=fwding_intf.ethaddr,
+                                            srcip=fwding_intf.ipaddr,
                                             targetip=ip_pkt.dst)
-            self.net.send_packet(input_port, request)
+                new_pkt_info = PacketFwdInfo(pkt=full_pkt, input_port=pkt_info.input_port,
+                                             timestamp=pkt_info.timestamp,
+                                             arp_attempts=pkt_info.arp_attempts + 1)
+                self.net.send_packet(fwding_intf.name, request)
         else:  # send ARP request to all other ports
             request = create_ip_arp_request(srchw=incoming_intf.ethaddr,
                                             srcip=incoming_intf.ipaddr,
                                             targetip=ip_pkt.dst)
             for intf in self.interfaces:
-                if intf.name == input_port:
+                if intf.name == pkt_info.input_port:
                     continue
                 self.net.send_packet(intf.name, request)
-        return
+        return new_pkt_info
 
     def handle_arp(self, arp, input_port, timestamp):
         if arp.operation == ArpOperation.Request:
@@ -134,7 +161,7 @@ class ForwardTable(object):
 
         # add entries for the routers interface
         for intf in net.interfaces():
-            prefix = intf.ipaddr  # already is IPv4Interface
+            prefix = IPv4Address(int(intf.netmask) & int(intf.ipaddr))  # already is IPv4Interface
             print(prefix)
             # there is no next hop or intf to forward on b/c we are destination
             entry = FwTblEntry(prefix, intf.netmask, None, intf.name)
@@ -144,13 +171,14 @@ class ForwardTable(object):
         with open(entry_filename) as file:
             lines = file.readlines()
         for line in lines:
-            vals = line.split(' ')
+            vals = line.split()
             prefix = IPv4Address(vals[0])
             mask = IPv4Address(vals[1])
             next_hop = IPv4Address(vals[2])
             interface = vals[3]
             entry = FwTblEntry(prefix, mask, next_hop, interface)
             self.tbl.append(entry)
+
 
     def lookup(self, ipaddr):
         #TODO: Here is where we do the entire lookup
@@ -189,6 +217,14 @@ class FwTblEntry(object):
         self.next_hop = next_hop #Should be an IPv4Address object
         self.interface = interface #Should be a string with the interface name
 
+
+class PacketFwdInfo(object):
+    def __init__(self, pkt, input_port, timestamp, arp_attempts=0):
+        self.pkt = pkt
+        self.input_port = input_port
+        self.timestamp = timestamp #of the packet we received
+        self.arp_attempts = arp_attempts
+        self.arp_timestamp = time.time()
 
 class ArpTable(object):
     def __init__(self):
