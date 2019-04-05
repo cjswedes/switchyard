@@ -128,6 +128,24 @@ def router_tests():
     packet = mk_pkt(hwsrc='10:00:00:00:00:03', hwdst='30:00:00:00:00:01', ipsrc='192.168.1.100', ipdst='128.128.128.128')
     s.expect(PacketInputEvent("router-eth0", packet), 'Receive packet without an entry in forward table. Do nothing')
 
+    # inject ip packet, has not arp entry
+    # wait for 3 arp requests
+    # the packet should be dropped
+    # this doesn't test timing, just number of arp requests sents
+    packet_arp = mk_pkt(hwsrc='10:00:00:00:00:03', hwdst='30:00:00:00:00:01', ipsrc='192.168.1.100',
+                        ipdst='99.99.9.1')
+    # seems like this packet is getting dropped for some reason, but I dont know why
+    # it could have to do with how I added the entry to the forwarding_table.txt
+    s.expect(PacketInputEvent("router-eth2", packet_arp),
+             "should receive IP packet requiring arp resolution to be forwarded out router-eth1")
+
+    arp_request = create_ip_arp_request('10:00:00:00:00:04', '111.111.111.1', '22.22.22.22')
+    s.expect(PacketOutputEvent("router-eth3", arp_request),
+             "should receive arp request to resolve unknown next hop for 99.99.9.1")
+    s.expect(PacketOutputEvent('router-eth3', arp_request), 'receive arp reqeuest 2')
+    s.expect(PacketOutputEvent('router-eth3', arp_request), 'receive arp reqeuest 3')
+
+
     return s
 
 scenario = router_tests()
