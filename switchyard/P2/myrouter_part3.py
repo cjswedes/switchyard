@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 '''
-Basic IPv4 router (static routing) in Python.
+Dynamic IPv4 router in Python.
 '''
 
 import sys
@@ -11,6 +11,8 @@ import time
 from switchyard.lib.packet.util import *
 from switchyard.lib.userlib import *
 from switchyard.lib.address import *
+from dynamicroutingmessage import DynamicRoutingMessage
+
 
 class Router(object):
     def __init__(self, net):
@@ -22,7 +24,8 @@ class Router(object):
         self.fwd_tbl = ForwardTable(net)
         self.interfaces = net.interfaces()
         # other initialization stuff here
-
+        # PART3
+        self.dynamic_routing_table = DynamicTable()
 
     def router_main(self):
         '''
@@ -66,23 +69,60 @@ class Router(object):
                     if new_pkt_info:
                         self.arp_wait_queue.append(new_pkt_info)
 
-    def handle_IPv4(self, pkt_info):
-        # be careful about what to do if you need to send an arp query
-        # you should check out the FAQs questions 1, 3, and 4
+                if pkt_info.pkt.get_header(DynamicRoutingMessage):
+                    self.handle_dynamic(pkt_info)
 
-        # decrement TTL by 1
-        # create new Ethernet header packet to be forwarded
-            # dst Ethernet MAC ~ host where needs to be forwarded
-            # next hop host ~
-                # dst Host or IP Address on the router
+    def handle_IPv4(self, pkt_info):
+
         full_pkt = pkt_info.pkt
         ip_pkt = full_pkt.get_header(IPv4)
         incoming_intf = self.get_interface(pkt_info.input_port)
         entry = self.fwd_tbl.lookup(ip_pkt.dst)
         new_pkt_info = None
-        #arp_entry = self.arp_tbl.lookup(ip_pkt.dst)
 
-        if entry and entry.next_hop:
+        dynamic_entry = self.dynamic_routing_table.lookup(ip_pkt.dst)
+
+        if dynamic_entry and dynamic_entry.next_hop:
+            # fwd override
+            arp_entry = self.arp_tbl.lookup(dynamic_entry.next_hop)
+            fwding_intf = self.get_interface(dynamic_entry.interface)
+            if arp_entry:
+                # Create new Ethernet Header
+                eth_header = Ethernet(src=fwding_intf.ethaddr,  # incoming_inft prev
+                                      dst=arp_entry.MAC,
+                                      ethertype=EtherType.IPv4)
+                full_pkt[0] = eth_header
+                self.net.send_packet(fwding_intf.name, full_pkt)
+                # TODO update time of use for this ARP entry
+            else:
+                # send ARP request
+                request = create_ip_arp_request(srchw=fwding_intf.ethaddr,
+                                                srcip=fwding_intf.ipaddr,
+                                                targetip=entry.next_hop)
+                new_pkt_info = PacketFwdInfo(pkt=full_pkt, input_port=pkt_info.input_port,
+                                             timestamp=pkt_info.timestamp,
+                                             arp_attempts=pkt_info.arp_attempts + 1)
+                self.net.send_packet(fwding_intf.name, request)
+        elif dynamic_entry and not dynamic_entry.next_hop:
+            # arp for dynamic entry
+            arp_entry = self.arp_tbl.lookup(ip_pkt.dst)
+            fwding_intf = self.get_interface(entry.interface)
+            if arp_entry:
+                # Create new Ethernet Header
+                eth_header = Ethernet(src=fwding_intf.ethaddr,
+                                      dst=arp_entry.MAC,
+                                      ethertype=EtherType.IPv4)
+                full_pkt[0] = eth_header
+                self.net.send_packet(fwding_intf.name, full_pkt)
+            else:
+                request = create_ip_arp_request(srchw=fwding_intf.ethaddr,
+                                                srcip=fwding_intf.ipaddr,
+                                                targetip=ip_pkt.dst)
+                new_pkt_info = PacketFwdInfo(pkt=full_pkt, input_port=pkt_info.input_port,
+                                             timestamp=pkt_info.timestamp,
+                                             arp_attempts=pkt_info.arp_attempts + 1)
+                self.net.send_packet(fwding_intf.name, request)
+        elif entry and entry.next_hop:
             arp_entry = self.arp_tbl.lookup(entry.next_hop)
             fwding_intf = self.get_interface(entry.interface)
             if arp_entry:
@@ -163,6 +203,13 @@ class Router(object):
                 self.arp_wait_queue.append(new_pkt_info)
         return
 
+    def handle_dynamic(self, pkt_info):
+        incoming_intf = self.get_interface(pkt_info.input_port)
+        header = pkt_info.pkt.get_header(DynamicRoutingMessage)
+        entry = FwTblEntry(header.advertised_prefix, header.advertised_mask, None, incoming_intf)
+        self.dynamic_routing_table.add(entry)
+        return
+
     def get_interface(self, name):
         for intf in self.interfaces:
             if intf.name == name:
@@ -197,11 +244,6 @@ class ForwardTable(object):
 
 
     def lookup(self, ipaddr):
-        #TODO: Here is where we do the entire lookup
-        # should return a table entry object that we can
-        # then use to forward the packet
-        # *Should match the longest prefix first
-
         # find all matches and fill prefix_matches array
         prefix_matches = []
 
@@ -209,7 +251,7 @@ class ForwardTable(object):
             matches = (int(entry.mask) & int(ipaddr)) == int(entry.prefix)
 
             if matches:
-                prefix_matches.append(int(entry.mask))#netaddr.prefixlen)
+                prefix_matches.append(int(entry.mask))
             else:
                 prefix_matches.append(0)
 
@@ -242,6 +284,7 @@ class PacketFwdInfo(object):
         self.arp_attempts = arp_attempts
         self.arp_timestamp = time.time()
 
+
 class ArpTable(object):
     def __init__(self):
         self.tbl = []
@@ -264,6 +307,46 @@ class ArpEntry(object):
         self.IP = IP
         self.MAC = MAC
         self.time_stamp = time_stamp  # Should be an int
+
+
+class DynamicTable(object):
+    def __init__(self):
+        self.tbl = []
+        self.capacity = 5
+
+    def add(self, entry):
+        # check size limit for FIFO Control
+        # Mechanism: last element is the newest
+        if len(self.tbl) == self.capacity:
+            # remove last added
+            self.tbl.pop(0)
+
+        self.tbl.append(entry)  # Should take in FwTblEntries
+        return
+
+    def lookup(self, ipaddr):
+        # find all matches and fill prefix_matches array
+        prefix_matches = []
+
+        for entry in self.tbl:
+            matches = (int(entry.mask) & int(ipaddr)) == int(entry.prefix)
+
+            if matches:
+                prefix_matches.append(int(entry.mask))
+            else:
+                prefix_matches.append(0)
+
+        # find match with longest prefix
+        if len(prefix_matches) == 0:
+            return None
+
+        max_value = max(prefix_matches)
+
+        if max_value == 0:
+            return None
+        else:
+            max_index = prefix_matches.index(max_value)
+            return self.tbl[max_index]
 
 
 def main(net):

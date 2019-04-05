@@ -77,26 +77,29 @@ def router_tests():
     packet = mk_pkt(hwsrc='10:00:00:00:00:03', hwdst='30:00:00:00:00:01', ipsrc='192.168.1.100', ipdst='172.16.42.2', ttl=63)
     s.expect(PacketOutputEvent("router-eth2", packet), "IP packet should be forwarded to 172.16.42.2 out router-eth2")
 
-    # 5. Dynamic message received
-    drm_pkt = mk_dynamic_routing_packet('10:00:00:00:00:01',
-                                        IPv4Address('172.0.0.0'),
-                                        IPv4Address('255.255.0.0'),
-                                        IPv4Address('192.168.1.2'))
-    s.expect(PacketInputEvent("router-eth0", drm_pkt),
-             "Dynamic routing message on eth0")
 
-    # After the above dynamic routing packet has been received your forwarding table should get updated.
-    # After this if another packet is received with its prefix in the same network as both static and dynamic routes,
-    # the dynamic one gets chosen.
+    # 1   IP packet to be forwarded to 172.16.42.2 should arrive on
+    #     router-eth0
+    #         Expected event: recv_packet Ethernet
+    #         10:00:00:00:00:03->30:00:00:00:00:01 IP | IPv4
+    #         192.168.1.100->172.16.42.2 ICMP | ICMP EchoRequest 0 42 (0
+    #         data bytes) on router-eth0
 
-    # TODO for students: Write your own test for the above mentioned comment. This is not a deliverable. But will help
-    #  you test if your code is correct or not.
-    # 6. 2nd Dynamic message received
-    drm_pkt = mk_dynamic_routing_packet('10:00:00:00:00:11',
-                                        IPv4Address('172.0.0.0'),
-                                        IPv4Address('255.255.0.0'),
-                                        IPv4Address('192.168.1.2'))
-    s.expect(PacketInputEvent("router-eth0", drm_pkt), "Dynamic routing message on eth0")
+    packet = mk_pkt(hwsrc = '10:00:00:00:00:03', hwdst =  '30:00:00:00:00:01', ipsrc  = '192.168.1.100', ipdst = '172.16.42.2')
+    s.expect(PacketInputEvent("router-eth0", packet), "IP packet to be forwarded to 172.16.42.2 should arrive on router-eth0")
+
+
+    # 4   IP packet should be forwarded to 172.16.42.2 out router-eth2
+    #         Expected event: send_packet(s) Ethernet
+    #         10:00:00:00:00:03->30:00:00:00:00:01 IP | IPv4
+    #         192.168.1.100->172.16.42.2 ICMP | ICMP EchoRequest 0 42 (0
+    #         data bytes) out router-eth2
+
+    packet = mk_pkt(hwsrc='10:00:00:00:00:03', hwdst='30:00:00:00:00:01', ipsrc='192.168.1.100', ipdst='172.16.42.2', ttl=63)
+    s.expect(PacketOutputEvent("router-eth2", packet), "IP packet should be forwarded to 172.16.42.2 out router-eth2")
+
+
+
 
     return s
 
