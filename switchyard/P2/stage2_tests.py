@@ -123,6 +123,11 @@ def router_tests():
     s.expect(PacketOutputEvent("router-eth1", packet_arp), "packet that was resolved with arp should be forwarded")
 
 
+    # inject ip packet that doesn't haave an entry in the fwd table
+    # it should drop
+    packet = mk_pkt(hwsrc='10:00:00:00:00:03', hwdst='30:00:00:00:00:01', ipsrc='192.168.1.100', ipdst='128.128.128.128')
+    s.expect(PacketInputEvent("router-eth0", packet), 'Receive packet without an entry in forward table. Do nothing')
+
     return s
 
 scenario = router_tests()

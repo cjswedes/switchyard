@@ -120,14 +120,14 @@ class Router(object):
                                              timestamp=pkt_info.timestamp,
                                              arp_attempts=pkt_info.arp_attempts + 1)
                 self.net.send_packet(fwding_intf.name, request)
-        else:  # send ARP request to all other ports
+        '''else:  # send ARP request to all other ports
             request = create_ip_arp_request(srchw=incoming_intf.ethaddr,
                                             srcip=incoming_intf.ipaddr,
                                             targetip=ip_pkt.dst)
             for intf in self.interfaces:
                 if intf.name == pkt_info.input_port:
                     continue
-                self.net.send_packet(intf.name, request)
+                self.net.send_packet(intf.name, request)'''
         return new_pkt_info
 
     def handle_arp(self, arp, input_port, timestamp):
