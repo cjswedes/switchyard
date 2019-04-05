@@ -34,6 +34,7 @@ def router_tests():
     s.add_interface('router-eth0', '10:00:00:00:00:01', ipaddr = '192.168.1.1', netmask = '255.255.255.252')
     s.add_interface('router-eth1', '10:00:00:00:00:02', ipaddr = '10.10.0.1', netmask = '255.255.0.0')
     s.add_interface('router-eth2', '10:00:00:00:00:03', ipaddr = '172.16.42.1', netmask = '255.255.255.0')
+    s.add_interface('router-eth3', '10:00:00:00:00:04', ipaddr = '111.111.111.1', netmask='255.255.192.0')
 
 
     # 1   IP packet to be forwarded to 172.16.42.2 should arrive on
@@ -98,7 +99,28 @@ def router_tests():
     packet = mk_pkt(hwsrc='10:00:00:00:00:03', hwdst='30:00:00:00:00:01', ipsrc='192.168.1.100', ipdst='172.16.42.2', ttl=63)
     s.expect(PacketOutputEvent("router-eth2", packet), "IP packet should be forwarded to 172.16.42.2 out router-eth2")
 
+    # inject ip packet not in arp table
+    # inject ip packet that is in arp table
+    # receive arp request
+    # receive ip packeet (the second one)
+    # respond to arp request
+    # receive ip packet (the first on)
+    packet_arp = mk_pkt(hwsrc='10:00:00:00:00:03', hwdst='30:00:00:00:00:01', ipsrc='192.168.1.100', ipdst='172.16.128.3')
+    s.expect(PacketInputEvent("router-eth2", packet_arp), "should receive IP packet requiring arp resolution to be forwarded out router-eth1")
 
+    arp_request = create_ip_arp_request('10:00:00:00:00:02', '10.10.0.1', '10.10.0.254')
+    s.expect(PacketOutputEvent("router-eth1", arp_request), "should receive arp request to resolve uknown ethaddr for 172.16.128.3")
+
+    packet_noarp = mk_pkt(hwsrc='10:00:00:00:00:03', hwdst='30:00:00:00:00:01', ipsrc='192.168.1.100', ipdst='172.16.42.2')
+    s.expect(PacketInputEvent("router-eth2", packet_noarp), "IP packet not requiring arp resolution to be forwarded out router-eth2")
+    packet_noarp = mk_pkt(hwsrc='10:00:00:00:00:03', hwdst='30:00:00:00:00:01', ipsrc='192.168.1.100', ipdst='172.16.42.2', ttl=63)
+    s.expect(PacketOutputEvent("router-eth2", packet_noarp), "Packet with arp mapping should be forwarded out router-eth2")
+    arp_response = create_ip_arp_reply('aa:aa:00:00:00:02', '10:00:00:00:00:03',
+                                       '10.10.0.254', '172.16.42.1')
+    s.expect(PacketInputEvent("router-eth1", arp_response),
+             "Router should receive ARP response for 172.16.128.3 on router-eth1 interface")
+    packet_arp = mk_pkt(hwsrc='10:00:00:00:00:02', hwdst='aa:aa:00:00:00:02', ipsrc='192.168.1.100', ipdst='172.16.128.3', ttl=63)
+    s.expect(PacketOutputEvent("router-eth1", packet_arp), "packet that was resolved with arp should be forwarded")
 
 
     return s
