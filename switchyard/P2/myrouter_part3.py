@@ -23,8 +23,6 @@ class Router(object):
         self.arp_tbl = ArpTable()
         self.fwd_tbl = ForwardTable(net)
         self.interfaces = net.interfaces()
-        # other initialization stuff here
-        # PART3
         self.dynamic_routing_table = DynamicTable()
 
     def router_main(self):
@@ -48,15 +46,19 @@ class Router(object):
                 self.pkt_queue.append(PacketFwdInfo(pkt, input_port, timestamp))
                 log_debug("Got a packet: {}".format(str(pkt)))
 
-            '''if len(self.arp_wait_queue) > 0:
-                pkt_info = self.arp_wait_queue.pop(0)
-                # TODO fix timestamp on ARP replies to reflect need
-                if (time.time() - pkt_info.arp_timestamp) > 1: #We have waited one second
-                    new_pkt_info = self.handle_IPv4(pkt_info)
-                    if new_pkt_info:
-                        self.arp_wait_queue.append(new_pkt_info)
-                else:
-                    self.arp_wait_queue.append(pkt_info)'''
+            # retry ARP requests if timeout
+            index = 0
+            if len(self.arp_wait_queue) > 0:
+                while index < len(self.arp_wait_queue):
+                    retry_entry = self.arp_wait_queue.pop(index)
+                    if (time.time() - retry_entry.arp_timestamp) > 1 and retry_entry.arp_attempts < 4:  # Waited one second
+                        new_pkt_info = self.handle_IPv4(retry_entry)
+                        if new_pkt_info:
+                            self.arp_wait_queue.insert(index, new_pkt_info)
+                            index = index + 1
+                    else:
+                        self.arp_wait_queue.insert(index, retry_entry)
+                        index = index + 1
 
             if len(self.pkt_queue) > 0:
                 pkt_info = self.pkt_queue.pop(0)
@@ -73,13 +75,15 @@ class Router(object):
                     self.handle_dynamic(pkt_info)
 
     def handle_IPv4(self, pkt_info):
-
         full_pkt = pkt_info.pkt
         ip_pkt = full_pkt.get_header(IPv4)
-        incoming_intf = self.get_interface(pkt_info.input_port)
         entry = self.fwd_tbl.lookup(ip_pkt.dst)
         new_pkt_info = None
 
+        # Edge Case: if meant for this router, drop
+        for intf in self.interfaces:
+            if intf.ipaddr == ip_pkt.dst:
+                return
         dynamic_entry = self.dynamic_routing_table.lookup(ip_pkt.dst)
 
         if dynamic_entry and dynamic_entry.next_hop:
@@ -132,7 +136,6 @@ class Router(object):
                                       ethertype=EtherType.IPv4)
                 full_pkt[0] = eth_header
                 self.net.send_packet(fwding_intf.name, full_pkt)
-                # TODO update time of use for this ARP entry
             else:
                 # send ARP request
                 request = create_ip_arp_request(srchw=fwding_intf.ethaddr,
@@ -160,14 +163,9 @@ class Router(object):
                                              timestamp=pkt_info.timestamp,
                                              arp_attempts=pkt_info.arp_attempts + 1)
                 self.net.send_packet(fwding_intf.name, request)
-        else:  # send ARP request to all other ports
-            request = create_ip_arp_request(srchw=incoming_intf.ethaddr,
-                                            srcip=incoming_intf.ipaddr,
-                                            targetip=ip_pkt.dst)
-            for intf in self.interfaces:
-                if intf.name == pkt_info.input_port:
-                    continue
-                self.net.send_packet(intf.name, request)
+        else:
+            a=1
+            # Not in forwarding table so drop request
         return new_pkt_info
 
     def handle_arp(self, arp, input_port, timestamp):
@@ -195,7 +193,6 @@ class Router(object):
 
     def handle_waitIPv4(self):
         # check if ARP response correlates to one of the waiting packets & process
-        # TODO add timeout handle chain
         while len(self.arp_wait_queue) > 0:
             pkt_waiting = self.arp_wait_queue.pop()
             new_pkt_info = self.handle_IPv4(pkt_waiting)
@@ -346,7 +343,10 @@ class DynamicTable(object):
             return None
         else:
             max_index = prefix_matches.index(max_value)
-            return self.tbl[max_index]
+            # Update most recently used
+            ret = self.tbl.pop(max_index)
+            self.tbl.append(ret)
+            return ret
 
 
 def main(net):
