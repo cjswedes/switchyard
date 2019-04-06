@@ -62,7 +62,7 @@ class Router(object):
             for intf in self.interfaces:
                 if intf.ipaddr == arp.targetprotoaddr:
                     # update arp table on reply where the destination is us
-                    entry = ArpEntry(arp.targetprotoaddr, arp.targethwaddr, timestamp)
+                    entry = ArpEntry(arp.senderprotoaddr, arp.senderhwaddr, timestamp)
                     self.arp_tbl.append(entry)
                     # self.arp_tbl[arp.targetprotoaddr] = arp.targethwaddr
             return
