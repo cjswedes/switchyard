@@ -32,7 +32,7 @@ def switchy_main(net):
     with open('middlebox_params.txt') as params:
         args = params.readline().split()
     if len(args) < 4:
-        print('Arguments issue')
+        print('Arguments issue in middlebox')
         assert False
     percent = int(args[3])
     random_seed = int(args[1])
@@ -78,6 +78,7 @@ def switchy_main(net):
             Received ACK
             Modify headers & send to blaster. Not dropping ACK packets!
             '''
+            # TODO: dooublle check the src and dest
             eth_header = Ethernet(src=blastee_intf.ethaddr,
                                   dst=blaster_intf.ethaddr,
                                   ethertype=EtherType.IPv4)
