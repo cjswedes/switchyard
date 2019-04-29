@@ -23,6 +23,9 @@ def switchy_main(net):
     my_interfaces = net.interfaces()
     mymacs = [intf.ethaddr for intf in my_interfaces]
 
+    BLASTEE_ETHADDR = EthAddr('20:00:00:00:00:01')
+    BLASTER_ETHADDR = EthAddr('10:00:00:00:00:01')
+
     while True:
         gotpkt = True
         try:
@@ -44,14 +47,15 @@ def switchy_main(net):
         #extract the sequence number from our header
         seq_num = extract_sequence_num(pkt[3])
         # generate the ACK packet with the corresponding number
-        eth_header = Ethernet(src=pkt[0].dst,
-                              dst=pkt[0].src,
+        eth_header = Ethernet(src=BLASTEE_ETHADDR,
+                              dst=BLASTER_ETHADDR,
                               ethertype=EtherType.IPv4)
 
         ack_data = create_raw_packet_header('ACK', seq_num)
         pkt[0] = eth_header
         pkt[3] = ack_data
 
+        log_debug("Sent pkt: {}".format(pkt))
         net.send_packet(dev.name, pkt)
 
     net.shutdown()

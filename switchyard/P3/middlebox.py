@@ -16,14 +16,19 @@ def switchy_main(net):
     mymacs = [intf.ethaddr for intf in my_intf]
     myips = [intf.ipaddr for intf in my_intf]
 
+    BLASTEE_ETHADDR = EthAddr('20:00:00:00:00:01')
+    BLASTER_ETHADDR = EthAddr('10:00:00:00:00:01')
+
     # extract interface objects
     blaster_intf = None
     blastee_intf = None
     for intf in my_intf:
         if intf.name == 'eth0':
             blaster_intf = intf
+            assert blaster_intf.ethaddr == BLASTER_ETHADDR
         elif intf.name == 'eth1':
             blastee_intf = intf
+            assert blastee_intf.ethaddr == BLASTEE_ETHADDR
     if not blaster_intf or not blastee_intf:
         print('error getting middlebox interfaces')
         assert False
@@ -66,7 +71,7 @@ def switchy_main(net):
                 continue
 
             # Create new Ethernet Header for the packet
-            # TODO: dooublle check the src and dest
+            # TODO: doublle check the src and dest
             eth_header = Ethernet(src=blaster_intf.ethaddr,
                                   dst=blastee_intf.ethaddr,
                                   ethertype=EtherType.IPv4)

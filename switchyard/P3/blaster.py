@@ -25,6 +25,9 @@ class SenderWindow():
     def window_full(self):
         return len(self.window) >= self.size
 
+    def is_empty(self):
+        return len(self.window) == 0
+
     def handle_ack(self, seq_num):
         for index, entry in enumerate(self.window):
             if entry[0] == seq_num:
@@ -33,17 +36,18 @@ class SenderWindow():
                     self.window.pop(0)
 
 
-    def handle_send(self, seq_num, packet):
+    def handle_send(self, net, intf, seq_num, packet):
         '''
         This adds packets to the window after they have already been sent
         :return True or false if the packet was sent.
         '''
         if self.window_full():
             return False
+        net.send_packet(intf, packet)
         self.window.append((seq_num, False, time.time(), packet))
         return True
 
-    def check_timeouts(self):
+    def check_timeouts(self, net, resend_intf):
         '''
         This checks each timer and will resend the packet if necessary
         :return: nothing
@@ -52,7 +56,8 @@ class SenderWindow():
             if time.time() - entry[2] > self.timeout:
                 log_debug('Resending packet num: ' + entry[0])
                 self.window[index][2] = time.time()  # update the timer
-                #TODO: resend packet
+                # resend the packet
+                net.send_packet(resend_intf.name, entry[3])
         return None
 
 
@@ -81,6 +86,16 @@ def switchy_main(net):
     mymacs = [intf.ethaddr for intf in my_intf]
     myips = [intf.ipaddr for intf in my_intf]
 
+    # variables to kept track of for ending output
+    START_TIME = time.time()
+    NUM_RETX = 0
+    NUM_COARSE_TO = 0
+    THROUGH_PUT = 0
+    GOOD_PUT = 0
+    BLASTEE_ETHADDR = EthAddr('20:00:00:00:00:01')
+    BLASTER_ETHADDR = EthAddr('10:00:00:00:00:01')
+
+
     # Parsing the arguments file
     with open('blaster_params.txt') as params:
         args = params.readline().split()
@@ -93,12 +108,14 @@ def switchy_main(net):
     TIMEOUT = int(args[7])
     RECV_TIMEOUT = int(args[9])
 
+    NEXT_SEND_SEQ = 1
+
     sw = SenderWindow(SENDER_WINDOW, TIMEOUT)
     while True:
         gotpkt = True
         try:
             #Timeout value will be parameterized!
-            timestamp,dev,pkt = net.recv_packet(timeout=0.15)
+            timestamp,dev,pkt = net.recv_packet(timeout=RECV_TIMEOUT)
         except NoPackets:
             log_debug("No packets available in recv_packet")
             gotpkt = False
@@ -106,22 +123,39 @@ def switchy_main(net):
             log_debug("Got shutdown signal")
             break
 
-        sw.check_timeouts()
+        sw.check_timeouts(net, my_intf[0])
 
         if gotpkt:
             log_debug("I got a packet")
             # TODO: handle the ACK
+            log_debug("just received ACK for seq_num" + str(extract_sequence_num(pkt[3])))
+
+            # Check to see if we have completed all packets
+            if sw.is_empty() and NEXT_SEND_SEQ > NUM_PKTS:
+                break
         else:
             log_debug("Didn't receive anything")
 
             '''
             Creating the headers for the packet
             '''
-            pkt = Ethernet() + IPv4() + UDP()
+            pkt = Ethernet(src=BLASTER_ETHADDR,
+                           dst=BLASTEE_ETHADDR,
+                           ethertype=EtherType.IPv4) + \
+                  IPv4() + \
+                  UDP()
             pkt[1].protocol = IPProtocol.UDP
+
+
+            ack_data = create_raw_packet_header('ACK', seq_num)
+            pkt[3] = ack_data
 
             '''
             Do other things here and send packet
             '''
+            if sw.handle_send(NEXT_SEND_SEQ, pkt):
+                NEXT_SEND_SEQ = NEXT_SEND_SEQ + 1
 
+
+    print_output(time.time() - START_TIME, NUM_RETX, NUM_COARSE_TO, THROUGH_PUT, GOOD_PUT)
     net.shutdown()
