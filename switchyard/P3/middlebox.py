@@ -3,6 +3,7 @@
 from switchyard.lib.address import *
 from switchyard.lib.packet import *
 from switchyard.lib.userlib import *
+from switchyard.lib import logging
 from threading import *
 import random
 import time
@@ -11,6 +12,9 @@ def drop(percent):
     return random.randrange(100) < percent
 
 def switchy_main(net):
+    logging.setup_logging(True)
+
+    print("starting midllebox setup")
 
     my_intf = net.interfaces()
     mymacs = [intf.ethaddr for intf in my_intf]
@@ -19,16 +23,17 @@ def switchy_main(net):
     BLASTEE_ETHADDR = EthAddr('20:00:00:00:00:01')
     BLASTER_ETHADDR = EthAddr('10:00:00:00:00:01')
 
+
     # extract interface objects
     blaster_intf = None
     blastee_intf = None
     for intf in my_intf:
-        if intf.name == 'eth0':
+        if intf.name == 'middlebox-eth0':
             blaster_intf = intf
-            assert blaster_intf.ethaddr == BLASTER_ETHADDR
-        elif intf.name == 'eth1':
+            #assert blaster_intf.ethaddr == BLASTER_ETHADDR
+        elif intf.name == 'middlebox-eth1':
             blastee_intf = intf
-            assert blastee_intf.ethaddr == BLASTEE_ETHADDR
+            #assert blastee_intf.ethaddr == BLASTEE_ETHADDR
     if not blaster_intf or not blastee_intf:
         print('error getting middlebox interfaces')
         assert False
@@ -44,6 +49,7 @@ def switchy_main(net):
 
     random.seed(random_seed) #Extract random seed from params file
 
+    log_debug('Setup middlebox:\n\tDrop rate = {}\n\tRandomSeed = {}'.format(percent, random_seed))
     while True:
         gotpkt = True
         try:
@@ -73,7 +79,7 @@ def switchy_main(net):
             # Create new Ethernet Header for the packet
             # TODO: doublle check the src and dest
             eth_header = Ethernet(src=blaster_intf.ethaddr,
-                                  dst=blastee_intf.ethaddr,
+                                  dst=BLASTEE_ETHADDR,
                                   ethertype=EtherType.IPv4)
             pkt[0] = eth_header
             net.send_packet("middlebox-eth1", pkt)
@@ -85,7 +91,7 @@ def switchy_main(net):
             '''
             # TODO: dooublle check the src and dest
             eth_header = Ethernet(src=blastee_intf.ethaddr,
-                                  dst=blaster_intf.ethaddr,
+                                  dst=BLASTER_ETHADDR,
                                   ethertype=EtherType.IPv4)
             pkt[0] = eth_header
             net.send_packet("middlebox-eth0", pkt)

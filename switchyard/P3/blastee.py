@@ -3,6 +3,7 @@
 from switchyard.lib.address import *
 from switchyard.lib.packet import *
 from switchyard.lib.userlib import *
+from switchyard.lib import logging
 from threading import *
 import time
 
@@ -20,11 +21,14 @@ def extract_sequence_num(data):
     return num
 
 def switchy_main(net):
+    logging.setup_logging(True)
+
     my_interfaces = net.interfaces()
     mymacs = [intf.ethaddr for intf in my_interfaces]
 
     BLASTEE_ETHADDR = EthAddr('20:00:00:00:00:01')
     BLASTER_ETHADDR = EthAddr('10:00:00:00:00:01')
+    MIDDLEBOX_ETHADDR = EthAddr('40:00:00:00:00:02')
 
     while True:
         gotpkt = True

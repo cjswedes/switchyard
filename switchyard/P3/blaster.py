@@ -3,6 +3,7 @@
 from switchyard.lib.address import *
 from switchyard.lib.packet import *
 from switchyard.lib.userlib import *
+from switchyard.lib import logging
 from random import randint
 import time
 
@@ -21,6 +22,7 @@ class SenderWindow():
         self.window = []
         self.size = size
         self.timeout = timeout
+        log_debug('Sender window initialized')
 
     def window_full(self):
         return len(self.window) >= self.size
@@ -44,6 +46,8 @@ class SenderWindow():
         if self.window_full():
             return False
         net.send_packet(intf, packet)
+        log_debug('sending_packet with seq_num: ' + seq_num)
+
         self.window.append((seq_num, False, time.time(), packet))
         return True
 
@@ -52,6 +56,7 @@ class SenderWindow():
         This checks each timer and will resend the packet if necessary
         :return: nothing
         '''
+        log_debug("Checking Timeouts")
         for index, entry in enumerate(self.window):
             if time.time() - entry[2] > self.timeout:
                 log_debug('Resending packet num: ' + entry[0])
@@ -82,6 +87,8 @@ def extract_sequence_num(data):
     return num
 
 def switchy_main(net):
+    logging.setup_logging(True)
+
     my_intf = net.interfaces()
     mymacs = [intf.ethaddr for intf in my_intf]
     myips = [intf.ipaddr for intf in my_intf]
@@ -92,8 +99,10 @@ def switchy_main(net):
     NUM_COARSE_TO = 0
     THROUGH_PUT = 0
     GOOD_PUT = 0
+
     BLASTEE_ETHADDR = EthAddr('20:00:00:00:00:01')
     BLASTER_ETHADDR = EthAddr('10:00:00:00:00:01')
+    MIDDLEBOX_ETHADDR = EthAddr('40:00:00:00:00:01')
 
 
     # Parsing the arguments file
@@ -108,6 +117,8 @@ def switchy_main(net):
     TIMEOUT = int(args[7])
     RECV_TIMEOUT = int(args[9])
 
+    log_debug('Numpkt={}, length={}, sw={}, timeout={} recv_timeout={}'.format(NUM_PKTS, LENGTH,
+                                                                           SENDER_WINDOW, TIMEOUT, RECV_TIMEOUT))
     NEXT_SEND_SEQ = 1
 
     sw = SenderWindow(SENDER_WINDOW, TIMEOUT)
@@ -115,6 +126,7 @@ def switchy_main(net):
         gotpkt = True
         try:
             #Timeout value will be parameterized!
+            log_debug("ready to recieve, timeout in: {}".format(RECV_TIMEOUT))
             timestamp,dev,pkt = net.recv_packet(timeout=RECV_TIMEOUT)
         except NoPackets:
             log_debug("No packets available in recv_packet")
@@ -147,8 +159,8 @@ def switchy_main(net):
             pkt[1].protocol = IPProtocol.UDP
 
 
-            ack_data = create_raw_packet_header('ACK', seq_num)
-            pkt[3] = ack_data
+            syn_data = create_raw_packet_header('SYN', NEXT_SEND_SEQ)
+            pkt[3] = syn_data
 
             '''
             Do other things here and send packet
