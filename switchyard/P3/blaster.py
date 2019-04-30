@@ -143,7 +143,7 @@ def switchy_main(net):
 
         if gotpkt:
             log_debug("I got a packet")
-            # TODO: handle the ACK
+            sw.handle_ack(extract_sequence_num(pkt[3]))
             log_debug("just received ACK for seq_num" + str(extract_sequence_num(pkt[3])))
 
             # Check to see if we have completed all packets
