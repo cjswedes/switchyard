@@ -46,7 +46,7 @@ class SenderWindow():
         if self.window_full():
             return False
         net.send_packet(intf, packet)
-        log_debug('sending_packet with seq_num: ' + seq_num)
+        log_debug('sending_packet with seq_num: {}'.format(seq_num))
 
         self.window.append((seq_num, False, time.time(), packet))
         return True
@@ -74,12 +74,16 @@ def print_output(total_time, num_ret, num_tos, throughput, goodput):
     print("Goodput (Bps): " + str(goodput))
 
 def create_raw_packet_header(type, pkt_num):
-    return bytes(str(type) + ' ' + str(pkt_num), 'utf8')
+    res = bytes('{} {}'.format(type, pkt_num), 'utf8')
+    log_debug('created SYN header: {}'.format(res))
+    return res
 
-def extract_sequence_num(data):
-    string_data = str(data)
+def extract_sequence_num(raw_header):
+    # print("rawheader= {}".format(raw_header.data))
+    # print("converttostr= {}".format(str(raw_header.data)))
     try:
-        num = int(string_data.split().pop(-1))
+        # print('middle= {}'.format(str(raw_header.data).replace("'", "").split(' ')))
+        num = str(raw_header.data).replace("'", "").split(' ').pop(-1)
     except:
         print('error in blastee extracting the sequence number')
         assert False
@@ -126,8 +130,8 @@ def switchy_main(net):
         gotpkt = True
         try:
             #Timeout value will be parameterized!
-            log_debug("ready to recieve, timeout in: {}".format(RECV_TIMEOUT))
-            timestamp,dev,pkt = net.recv_packet(timeout=RECV_TIMEOUT)
+            log_debug("ready to recieve, timeout in: {}".format(RECV_TIMEOUT/100))
+            timestamp,dev,pkt = net.recv_packet(timeout=RECV_TIMEOUT/100)
         except NoPackets:
             log_debug("No packets available in recv_packet")
             gotpkt = False
@@ -158,14 +162,15 @@ def switchy_main(net):
                   UDP()
             pkt[1].protocol = IPProtocol.UDP
 
+            log_debug("creating packet: {}".format(pkt))
 
             syn_data = create_raw_packet_header('SYN', NEXT_SEND_SEQ)
-            pkt[3] = syn_data
-
+            pkt = pkt + syn_data
+            log_debug("created packet: {}".format(pkt))
             '''
             Do other things here and send packet
             '''
-            if sw.handle_send(NEXT_SEND_SEQ, pkt):
+            if sw.handle_send(net, my_intf[0], NEXT_SEND_SEQ, pkt):
                 NEXT_SEND_SEQ = NEXT_SEND_SEQ + 1
 
 

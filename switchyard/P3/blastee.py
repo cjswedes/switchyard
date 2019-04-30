@@ -8,12 +8,16 @@ from threading import *
 import time
 
 def create_raw_packet_header(type, pkt_num):
-    return bytes(str(type) + ' ' + str(pkt_num), 'utf8')
+    res = bytes('{} {}'.format(type, pkt_num), 'utf8')
+    log_debug('created ACK header: {}'.format(res))
+    return res
 
-def extract_sequence_num(data):
-    string_data = str(data)
+def extract_sequence_num(raw_header):
+    #print("rawheader= {}".format(raw_header.data))
+    #print("converttostr= {}".format(str(raw_header.data)))
     try:
-        num = int(string_data.split().pop(-1))
+        #print('middle= {}'.format(str(raw_header.data).replace("'", "").split(' ')))
+        num = str(raw_header.data).replace("'", "").split(' ').pop(-1)
     except:
         print('error in blastee extracting the sequence number')
         assert False
@@ -50,16 +54,17 @@ def switchy_main(net):
 
         #extract the sequence number from our header
         seq_num = extract_sequence_num(pkt[3])
+        log_debug('extracted seq_num: {}'.format(seq_num))
         # generate the ACK packet with the corresponding number
-        eth_header = Ethernet(src=BLASTEE_ETHADDR,
-                              dst=BLASTER_ETHADDR,
-                              ethertype=EtherType.IPv4)
-
         ack_data = create_raw_packet_header('ACK', seq_num)
-        pkt[0] = eth_header
-        pkt[3] = ack_data
-
-        log_debug("Sent pkt: {}".format(pkt))
-        net.send_packet(dev.name, pkt)
+        pkt = Ethernet(src=BLASTEE_ETHADDR,
+                       dst=BLASTER_ETHADDR,
+                       ethertype=EtherType.IPv4) + \
+              IPv4() + \
+              UDP()
+        pkt[1].protocol = IPProtocol.UDP
+        pkt = pkt + ack_data
+        log_debug("Sending ACK pkt: {}".format(pkt))
+        net.send_packet(dev, pkt)
 
     net.shutdown()
