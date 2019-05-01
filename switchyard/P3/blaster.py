@@ -25,9 +25,9 @@ class SenderWindow():
         log_debug('Sender window initialized')
 
     def print_window(self):
-        log_info("SENDERWINDOW: " + len(self.window))
+        log_info("SENDERWINDOW: " + str(len(self.window)))
         for index, entry in enumerate(self.window):
-            log_info("   " + index + ":  seq# [ " + entry[0] + " ] + time [ " + str(entry[2]) + " ]")
+            log_info("   " + str(index) + ":  seq# [ " + str(entry[0]) + " ] + time [ " + str(entry[2]) + " ]")
         return None
 
     def window_full(self):
@@ -147,7 +147,7 @@ def switchy_main(net):
             break
         try:
             #Timeout value will be parameterized!
-            log_debug("===ready to recieve, timeout in: {}".format(RECV_TIMEOUT/100))
+            log_debug("===ready to receive, timeout in: {}".format(RECV_TIMEOUT/100))
             timestamp,dev,pkt = net.recv_packet(timeout=RECV_TIMEOUT/100)
         except NoPackets:
             log_debug("No packets available in recv_packet")
