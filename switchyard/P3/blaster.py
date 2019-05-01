@@ -77,6 +77,7 @@ class SenderWindow():
         :return: nothing
         '''
         log_debug("Checking Timeouts")
+        num_sent = 0;
         for index, entry in enumerate(self.window):
             #log_debug("   " + str(time.time()) + " - " + entry[2] + " = " (time.time() - entry[2]))
             if time.time() - entry[2] > self.timeout and not entry[1]:
@@ -87,7 +88,8 @@ class SenderWindow():
                 # self.window[index][2] = time.time()  # update the timer
                 # resend the packet
                 net.send_packet(resend_intf.name, entry[3])
-        return None
+                num_sent = num_sent + 1
+        return num_sent
 
 
 def print_output(total_time, num_ret, num_tos, throughput, goodput):
@@ -96,6 +98,9 @@ def print_output(total_time, num_ret, num_tos, throughput, goodput):
     print("Number of coarse TOs: " + str(num_tos))
     print("Throughput (Bps): " + str(throughput))
     print("Goodput (Bps): " + str(goodput))
+
+def create_payload(length):
+    return bytearray(int(length))
 
 def create_raw_packet_header(type, pkt_num):
     res = bytes('{} {}'.format(type, pkt_num), 'utf8')
@@ -167,7 +172,7 @@ def switchy_main(net):
             log_debug("Got shutdown signal")
             break
 
-        sw.check_timeouts(net, my_intf[0])
+        NUM_RETX = NUM_RETX + sw.check_timeouts(net, my_intf[0])
 
         if gotpkt:
             sw.print_window()
@@ -196,7 +201,9 @@ def switchy_main(net):
             #log_debug("creating packet: {}".format(pkt))
 
             syn_data = create_raw_packet_header('SYN', NEXT_SEND_SEQ)
-            pkt = pkt + syn_data
+            payload = create_payload(LENGTH)
+            pkt = pkt + syn_data + payload
+
             #log_debug("created packet: {}".format(pkt))
             '''
             Do other things here and send packet
@@ -205,5 +212,9 @@ def switchy_main(net):
                 NEXT_SEND_SEQ = NEXT_SEND_SEQ + 1
 
 
-    print_output(time.time() - START_TIME, NUM_RETX, NUM_COARSE_TO, THROUGH_PUT, GOOD_PUT)
+    TTIME = time.time() - START_TIME
+    GOOD_PUT = (LENGTH * NUM_PKTS) / TTIME
+    THROUGH_PUT = (LENGTH * (NUM_PKTS + NUM_RETX)) / TTIME
+
+    print_output(TTIME, NUM_RETX, NUM_RETX, THROUGH_PUT, GOOD_PUT)
     net.shutdown()
