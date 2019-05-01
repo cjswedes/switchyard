@@ -21,7 +21,7 @@ class SenderWindow():
     def __init__(self, size, timeout):
         self.window = []
         self.size = size
-        self.timeout = timeout
+        self.timeout = timeout / 1000
         log_debug('Sender window initialized')
 
     def window_full(self):
@@ -58,10 +58,13 @@ class SenderWindow():
         '''
         log_debug("Checking Timeouts")
         for index, entry in enumerate(self.window):
-            log_debug("   " + time.time() + " - " + entry[2] + " = " (time.time() - entry[2]))
+            #log_debug("   " + str(time.time()) + " - " + entry[2] + " = " (time.time() - entry[2]))
             if time.time() - entry[2] > self.timeout:
-                log_debug('Resending packet num: ' + entry[0])
-                self.window[index][2] = time.time()  # update the timer
+                log_debug('Resending packet ') # + entry[0])
+                # TODO Update Packet
+                self.window.pop(index)
+                self.window.append(entry[0], False, time.time(), entry[3])
+                # self.window[index][2] = time.time()  # update the timer
                 # resend the packet
                 net.send_packet(resend_intf.name, entry[3])
         return None
