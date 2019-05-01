@@ -202,7 +202,8 @@ def switchy_main(net):
 
             syn_data = create_raw_packet_header('SYN', NEXT_SEND_SEQ)
             payload = create_payload(LENGTH)
-            pkt = pkt + syn_data + payload
+            pkt = pkt + syn_data
+            pkt = pkt + payload
 
             #log_debug("created packet: {}".format(pkt))
             '''
