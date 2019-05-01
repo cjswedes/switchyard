@@ -8,16 +8,24 @@ from threading import *
 import time
 
 def create_raw_packet_header(type, pkt_num):
-    res = bytes('{} {}'.format(type, pkt_num), 'utf8')
-    log_debug('created ACK header: {}'.format(res))
+    if type == 'SYN':
+        type_bytes = 0xffff
+    else:
+        type_bytes = 0x0000
+    num_bytes = pkt_num.to_bytes(2)
+    #res = bytes('{} {} '.format(type, pkt_num), 'utf8')
+    res = bytes(type_bytes).append(bytes(num_bytes))
+    log_debug('created SYN header: {}'.format(res))
     return res
 
 def extract_sequence_num(raw_header):
-    #print("rawheader= {}".format(raw_header.data))
-    #print("converttostr= {}".format(str(raw_header.data)))
+    # print("rawheader= {}".format(raw_header.data))
+    # print("converttostr= {}".format(str(raw_header.data)))
     try:
-        #print('middle= {}'.format(str(raw_header.data).replace("'", "").split(' ')))
-        num = str(raw_header.data).replace("'", "").split(' ').pop(-1)
+        # print('middle= {}'.format(str(raw_header.data).replace("'", "").split(' ')))
+        #num = str(raw_header.data).replace("'", "").split(' ').pop(-1)
+        header = bytearray(raw_header.data)
+        num = int(header[4:5])
     except:
         print('error in blastee extracting the sequence number')
         assert False
