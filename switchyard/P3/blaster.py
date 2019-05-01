@@ -152,8 +152,6 @@ def switchy_main(net):
 
     sw = SenderWindow(SENDER_WINDOW, TIMEOUT)
     while True:
-        log_debug("  ")
-        sw.print_window()
         gotpkt = True
         if num_acks == NUM_PKTS:
             # No more packets to receive
@@ -172,6 +170,7 @@ def switchy_main(net):
         sw.check_timeouts(net, my_intf[0])
 
         if gotpkt:
+            sw.print_window()
             log_debug(" * Received ACK for seq_num" + str(extract_sequence_num(pkt[3])))
             #log_debug("I got a packet")
             sw.handle_ack(extract_sequence_num(pkt[3]))
@@ -181,6 +180,7 @@ def switchy_main(net):
             if sw.is_empty() and NEXT_SEND_SEQ > NUM_PKTS:
                 break
         elif NEXT_SEND_SEQ <= NUM_PKTS:
+            sw.print_window()
             log_debug(" * Didn't receive anything")
 
             '''
