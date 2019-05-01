@@ -34,8 +34,8 @@ class SenderWindow():
         for index, entry in enumerate(self.window):
             if entry[0] == seq_num:
                 entry[1] = True
-                if index == 0:  # This is the lowest seq number
-                    self.window.pop(0)
+                #if index == 0:  # This is the lowest seq number
+                self.window.pop(index)
 
 
     def handle_send(self, net, intf, seq_num, packet):
