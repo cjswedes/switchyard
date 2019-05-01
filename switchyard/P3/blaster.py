@@ -58,6 +58,7 @@ class SenderWindow():
         '''
         log_debug("Checking Timeouts")
         for index, entry in enumerate(self.window):
+            log_debug("   " + time.time() + " - " + entry[2] + " = " (time.time() - entry[2]))
             if time.time() - entry[2] > self.timeout:
                 log_debug('Resending packet num: ' + entry[0])
                 self.window[index][2] = time.time()  # update the timer
