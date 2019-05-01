@@ -37,14 +37,22 @@ class SenderWindow():
         return len(self.window) == 0
 
     def handle_ack(self, seq_num):
+        purge = False
         for index, entry in enumerate(self.window):
             log_debug("  HANDLE ACK: index={} entrySeq#={} seq#Ack'd={}".format(index, entry[0], seq_num))
             if float(entry[0]) == float(seq_num):
-                #entry[1] = True
-                #if index == 0:  # This is the lowest seq number
-                log_debug("  ACK FOUND: POP index={}".format(index))
                 self.window.pop(index)
-                break
+                if index != 0:
+                    self.window.insert(index, (entry[0], True, entry[2], entry[3]))
+                else:
+                    purge = True
+
+                log_debug("  ACK FOUND: POP index={}".format(index))
+            elif purge:
+                if entry[1]:
+                    self.window.pop(index)
+                else:
+                    break
 
 
     def handle_send(self, net, intf, seq_num, packet):
@@ -72,7 +80,7 @@ class SenderWindow():
                 log_debug('Resending packet') # + entry[0])
                 # TODO Update Packet
                 self.window.pop(index)
-                self.window.append((entry[0], False, time.time(), entry[3]))
+                self.window.insert(index, (entry[0], False, time.time(), entry[3]))
                 # self.window[index][2] = time.time()  # update the timer
                 # resend the packet
                 net.send_packet(resend_intf.name, entry[3])
