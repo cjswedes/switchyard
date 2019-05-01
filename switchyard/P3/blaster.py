@@ -39,7 +39,6 @@ class SenderWindow():
     def handle_ack(self, seq_num):
         purge = False
         for index, entry in enumerate(self.window):
-            log_debug("  HANDLE ACK: index={} entrySeq#={} seq#Ack'd={}".format(index, entry[0], seq_num))
             if float(entry[0]) == float(seq_num):
                 if index != 0:
                     self.window[index] = (entry[0], True, entry[2], entry[3])
@@ -57,18 +56,23 @@ class SenderWindow():
             else:
                 break
 
+        self.print_window()
+
 
     def handle_send(self, net, intf, seq_num, packet):
         '''
         This adds packets to the window after they have already been sent
         :return True or false if the packet was sent.
         '''
+
         if self.window_full():
             return False
         net.send_packet(intf, packet)
-        log_debug('sending_packet with seq_num: {}'.format(seq_num))
+        log_debug('Sending packet with seq_num: {}'.format(seq_num))
 
         self.window.append((seq_num, False, time.time(), packet))
+
+        self.print_window()
         return True
 
     def check_timeouts(self, net, resend_intf):
@@ -76,17 +80,14 @@ class SenderWindow():
         This checks each timer and will resend the packet if necessary
         :return: nothing
         '''
-        log_debug("Checking Timeouts")
         num_sent = 0;
         for index, entry in enumerate(self.window):
             #log_debug("   " + str(time.time()) + " - " + entry[2] + " = " (time.time() - entry[2]))
             if time.time() - entry[2] > self.timeout and not entry[1]:
-                log_debug('Resending packet') # + entry[0])
-                # TODO Update Packet
+                log_debug('Resending packet: {}'.format(extract_sequence_num(entry[3][3])))
                 self.window.pop(index)
                 self.window.insert(index, (entry[0], False, time.time(), entry[3]))
-                # self.window[index][2] = time.time()  # update the timer
-                # resend the packet
+
                 net.send_packet(resend_intf.name, entry[3])
                 num_sent = num_sent + 1
         return num_sent
@@ -99,28 +100,20 @@ def print_output(total_time, num_ret, num_tos, throughput, goodput):
     print("Throughput (Bps): " + str(throughput))
     print("Goodput (Bps): " + str(goodput))
 
-def create_payload(length):
-    return bytes(bytearray(int(length)))
 
-def create_raw_packet_header(type, pkt_num):
+def create_raw_packet_header(type, pkt_num, length):
     if type == 'SYN':
-        type_bytes = 0xffff
+        type_bytes = b'ffff'
     else:
-        type_bytes = 0x0000
-    num_bytes = pkt_num.to_bytes(2)
-    #res = bytes('{} {} '.format(type, pkt_num), 'utf8')
-    res = bytes(type_bytes).append(bytes(num_bytes))
-    log_debug('created SYN header: {}'.format(res))
+        type_bytes = b'0000'
+    num_bytes = pkt_num.to_bytes(2, byteorder='big')
+    res = type_bytes + num_bytes + (b'a' * length)
     return res
 
 def extract_sequence_num(raw_header):
-    # print("rawheader= {}".format(raw_header.data))
-    # print("converttostr= {}".format(str(raw_header.data)))
     try:
-        # print('middle= {}'.format(str(raw_header.data).replace("'", "").split(' ')))
-        #num = str(raw_header.data).replace("'", "").split(' ').pop(-1)
-        header = bytearray(raw_header.data)
-        num = int(header[4:5])
+        header = raw_header.data
+        num = int.from_bytes(header[5:6], byteorder='big')
     except:
         print('error in blastee extracting the sequence number')
         assert False
@@ -183,7 +176,6 @@ def switchy_main(net):
         NUM_RETX = NUM_RETX + sw.check_timeouts(net, my_intf[0])
 
         if gotpkt:
-            sw.print_window()
             log_debug(" * Received ACK for seq_num" + str(extract_sequence_num(pkt[3])))
             #log_debug("I got a packet")
             sw.handle_ack(extract_sequence_num(pkt[3]))
@@ -193,7 +185,6 @@ def switchy_main(net):
             if sw.is_empty() and NEXT_SEND_SEQ > NUM_PKTS:
                 break
         elif NEXT_SEND_SEQ <= NUM_PKTS:
-            sw.print_window()
             log_debug(" * Didn't receive anything")
 
             '''
@@ -206,12 +197,8 @@ def switchy_main(net):
                   UDP()
             pkt[1].protocol = IPProtocol.UDP
 
-            #log_debug("creating packet: {}".format(pkt))
-
-            syn_data = create_raw_packet_header('SYN', NEXT_SEND_SEQ)
-            payload = create_payload(LENGTH)
-            pkt = pkt + RawPacketContents(raw=syn_data)
-            pkt = pkt + RawPacketContents(raw=payload)
+            syn_data = create_raw_packet_header('SYN', NEXT_SEND_SEQ, LENGTH)
+            pkt = pkt + syn_data
 
             #log_debug("created packet: {}".format(pkt))
             '''
