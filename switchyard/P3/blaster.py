@@ -103,6 +103,7 @@ def switchy_main(net):
     NUM_COARSE_TO = 0
     THROUGH_PUT = 0
     GOOD_PUT = 0
+    num_acks = 0
 
     BLASTEE_ETHADDR = EthAddr('20:00:00:00:00:01')
     BLASTER_ETHADDR = EthAddr('10:00:00:00:00:01')
@@ -128,6 +129,10 @@ def switchy_main(net):
     sw = SenderWindow(SENDER_WINDOW, TIMEOUT)
     while True:
         gotpkt = True
+        if num_acks == NUM_PKTS:
+            # No more packets to receive
+            break
+            
         try:
             #Timeout value will be parameterized!
             log_debug("ready to recieve, timeout in: {}".format(RECV_TIMEOUT/100))
@@ -144,6 +149,7 @@ def switchy_main(net):
         if gotpkt:
             log_debug("I got a packet")
             sw.handle_ack(extract_sequence_num(pkt[3]))
+            num_acks = num_acks + 1
             log_debug("just received ACK for seq_num" + str(extract_sequence_num(pkt[3])))
 
             # Check to see if we have completed all packets
