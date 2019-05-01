@@ -27,7 +27,7 @@ class SenderWindow():
     def print_window(self):
         log_info("SENDERWINDOW: " + str(len(self.window)))
         for index, entry in enumerate(self.window):
-            log_info("   " + str(index) + ":  seq# [ " + str(entry[0]) + " ] + time [ " + str(entry[2]) + " ]")
+            log_info("   " + str(index) + ":  seq# [ " + str(entry[0]) + " ] Ack'd [ " + str(entry[1]) + " ] time [ " + str(entry[2]) + " ]")
         return None
 
     def window_full(self):
