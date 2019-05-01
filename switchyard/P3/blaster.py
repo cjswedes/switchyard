@@ -49,12 +49,12 @@ class SenderWindow():
                     break
 
                 log_debug("  ACK FOUND: POP index={}".format(index))
-        if purge:
-            for index, entry in enumerate(self.window):
-                if entry[1]:
-                    self.window.pop(index)
-                else:
-                    break
+        while purge:
+            entry = self.window[0]
+            if entry[1]:
+                self.window.pop()
+            else:
+                break
 
 
     def handle_send(self, net, intf, seq_num, packet):
