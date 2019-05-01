@@ -103,7 +103,7 @@ def create_payload(length):
     return bytes(bytearray(int(length)))
 
 def create_raw_packet_header(type, pkt_num):
-    res = bytes('{} {}'.format(type, pkt_num), 'utf8')
+    res = bytes('{} {} '.format(type, pkt_num), 'utf8')
     log_debug('created SYN header: {}'.format(res))
     return res
 
