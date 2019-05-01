@@ -41,14 +41,16 @@ class SenderWindow():
         for index, entry in enumerate(self.window):
             log_debug("  HANDLE ACK: index={} entrySeq#={} seq#Ack'd={}".format(index, entry[0], seq_num))
             if float(entry[0]) == float(seq_num):
-                self.window.pop(index)
                 if index != 0:
-                    self.window.insert(index, (entry[0], True, entry[2], entry[3]))
+                    self.window[index] = (index, (entry[0], True, entry[2], entry[3]))
                 else:
+                    self.window.pop(index)
                     purge = True
+                    break
 
                 log_debug("  ACK FOUND: POP index={}".format(index))
-            elif purge:
+        if purge:
+            for index, entry in enumerate(self.window):
                 if entry[1]:
                     self.window.pop(index)
                 else:
@@ -157,8 +159,8 @@ def switchy_main(net):
             break
         try:
             #Timeout value will be parameterized!
-            log_debug("===ready to receive, timeout in: {}".format(RECV_TIMEOUT/100))
-            timestamp,dev,pkt = net.recv_packet(timeout=RECV_TIMEOUT/100)
+            log_debug("===ready to receive, timeout in: {}".format(RECV_TIMEOUT/1000))
+            timestamp,dev,pkt = net.recv_packet(timeout=RECV_TIMEOUT/1000)
         except NoPackets:
             log_debug("No packets available in recv_packet")
             gotpkt = False
@@ -177,7 +179,7 @@ def switchy_main(net):
             # Check to see if we have completed all packets
             if sw.is_empty() and NEXT_SEND_SEQ > NUM_PKTS:
                 break
-        else:
+        elif NEXT_SEND_SEQ <= NUM_PKTS:
             log_debug(" * Didn't receive anything")
 
             '''
