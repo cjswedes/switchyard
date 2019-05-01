@@ -42,14 +42,15 @@ class SenderWindow():
             log_debug("  HANDLE ACK: index={} entrySeq#={} seq#Ack'd={}".format(index, entry[0], seq_num))
             if float(entry[0]) == float(seq_num):
                 if index != 0:
-                    self.window[index] = (index, (entry[0], True, entry[2], entry[3]))
+                    self.window[index] = (entry[0], True, entry[2], entry[3])
                 else:
                     self.window.pop(index)
                     purge = True
                     break
 
-                log_debug("  ACK FOUND: POP index={}".format(index))
+                log_debug("  ACK FOUND: index={}".format(index))
         while purge:
+            log_debug("  COMMENCE THE PURGE")
             entry = self.window[0]
             if entry[1]:
                 self.window.pop(0)
