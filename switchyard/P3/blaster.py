@@ -100,7 +100,7 @@ def print_output(total_time, num_ret, num_tos, throughput, goodput):
     print("Goodput (Bps): " + str(goodput))
 
 def create_payload(length):
-    return bytearray(int(length))
+    return bytes(bytearray(int(length)))
 
 def create_raw_packet_header(type, pkt_num):
     res = bytes('{} {}'.format(type, pkt_num), 'utf8')
