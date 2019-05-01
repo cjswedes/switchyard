@@ -24,6 +24,12 @@ class SenderWindow():
         self.timeout = timeout / 1000
         log_debug('Sender window initialized')
 
+    def print_window(self):
+        log_info("SENDERWINDOW: " + len(self.window))
+        for index, entry in enumerate(self.window):
+            log_info("   " + index + ":  seq# [ " + entry[0] + " ] + time [ " + str(entry[2]) + " ]")
+        return None
+
     def window_full(self):
         return len(self.window) >= self.size
 
@@ -35,7 +41,8 @@ class SenderWindow():
             if entry[0] == seq_num:
                 entry[1] = True
                 #if index == 0:  # This is the lowest seq number
-                self.window.pop(index)
+                self.window.pop(0)
+                break
 
 
     def handle_send(self, net, intf, seq_num, packet):
@@ -59,8 +66,8 @@ class SenderWindow():
         log_debug("Checking Timeouts")
         for index, entry in enumerate(self.window):
             #log_debug("   " + str(time.time()) + " - " + entry[2] + " = " (time.time() - entry[2]))
-            if time.time() - entry[2] > self.timeout:
-                log_debug('Resending packet ') # + entry[0])
+            if time.time() - entry[2] > self.timeout and not entry[1]:
+                log_debug('Resending packet') # + entry[0])
                 # TODO Update Packet
                 self.window.pop(index)
                 self.window.append((entry[0], False, time.time(), entry[3]))
@@ -132,13 +139,15 @@ def switchy_main(net):
 
     sw = SenderWindow(SENDER_WINDOW, TIMEOUT)
     while True:
+        log_debug("  ")
+        sw.print_window()
         gotpkt = True
         if num_acks == NUM_PKTS:
             # No more packets to receive
             break
         try:
             #Timeout value will be parameterized!
-            log_debug("ready to recieve, timeout in: {}".format(RECV_TIMEOUT/100))
+            log_debug("===ready to recieve, timeout in: {}".format(RECV_TIMEOUT/100))
             timestamp,dev,pkt = net.recv_packet(timeout=RECV_TIMEOUT/100)
         except NoPackets:
             log_debug("No packets available in recv_packet")
@@ -150,16 +159,16 @@ def switchy_main(net):
         sw.check_timeouts(net, my_intf[0])
 
         if gotpkt:
-            log_debug("I got a packet")
+            log_debug(" * Received ACK for seq_num" + str(extract_sequence_num(pkt[3])))
+            #log_debug("I got a packet")
             sw.handle_ack(extract_sequence_num(pkt[3]))
             num_acks = num_acks + 1
-            log_debug("just received ACK for seq_num" + str(extract_sequence_num(pkt[3])))
 
             # Check to see if we have completed all packets
             if sw.is_empty() and NEXT_SEND_SEQ > NUM_PKTS:
                 break
         else:
-            log_debug("Didn't receive anything")
+            log_debug(" * Didn't receive anything")
 
             '''
             Creating the headers for the packet
@@ -171,11 +180,11 @@ def switchy_main(net):
                   UDP()
             pkt[1].protocol = IPProtocol.UDP
 
-            log_debug("creating packet: {}".format(pkt))
+            #log_debug("creating packet: {}".format(pkt))
 
             syn_data = create_raw_packet_header('SYN', NEXT_SEND_SEQ)
             pkt = pkt + syn_data
-            log_debug("created packet: {}".format(pkt))
+            #log_debug("created packet: {}".format(pkt))
             '''
             Do other things here and send packet
             '''
