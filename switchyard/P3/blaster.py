@@ -132,7 +132,6 @@ def switchy_main(net):
         if num_acks == NUM_PKTS:
             # No more packets to receive
             break
-            
         try:
             #Timeout value will be parameterized!
             log_debug("ready to recieve, timeout in: {}".format(RECV_TIMEOUT/100))

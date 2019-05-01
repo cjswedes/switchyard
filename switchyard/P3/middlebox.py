@@ -74,6 +74,7 @@ def switchy_main(net):
             If not, modify headers & send to blastee
             '''
             if drop(percent=percent):
+                log_debug("DROPPING THIS PACKET")
                 continue
 
             # Create new Ethernet Header for the packet
