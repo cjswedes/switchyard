@@ -63,7 +63,7 @@ class SenderWindow():
                 log_debug('Resending packet ') # + entry[0])
                 # TODO Update Packet
                 self.window.pop(index)
-                self.window.append(entry[0], False, time.time(), entry[3])
+                self.window.append((entry[0], False, time.time(), entry[3]))
                 # self.window[index][2] = time.time()  # update the timer
                 # resend the packet
                 net.send_packet(resend_intf.name, entry[3])
