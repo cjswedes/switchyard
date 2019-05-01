@@ -38,10 +38,12 @@ class SenderWindow():
 
     def handle_ack(self, seq_num):
         for index, entry in enumerate(self.window):
+            log_debug("  HANDLE ACK: index={} entrySeq#={} seq#Ack'd={}".format(index, entry[0], seq_num))
             if entry[0] == seq_num:
-                entry[1] = True
+                #entry[1] = True
                 #if index == 0:  # This is the lowest seq number
-                self.window.pop(0)
+                log_debug("  ACK FOUND: POP index={}".format(index))
+                self.window.pop(index)
                 break
 
 
