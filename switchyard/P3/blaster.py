@@ -52,7 +52,7 @@ class SenderWindow():
         while purge:
             entry = self.window[0]
             if entry[1]:
-                self.window.pop()
+                self.window.pop(0)
             else:
                 break
 
