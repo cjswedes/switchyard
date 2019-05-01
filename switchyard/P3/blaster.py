@@ -49,7 +49,7 @@ class SenderWindow():
                     break
 
                 log_debug("  ACK FOUND: index={}".format(index))
-        while purge:
+        while purge and len(self.window) != 0:
             log_debug("  COMMENCE THE PURGE")
             entry = self.window[0]
             if entry[1]:
